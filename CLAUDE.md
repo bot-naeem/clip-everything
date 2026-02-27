@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CLI tool to clip web pages to Markdown files. Uses OpenClaw browser for automated clipping.
+ClipEverything - CLI tool to clip web pages to Markdown files. Uses OpenClaw browser for automated clipping.
+
+This project is derived from obsidian-clipper.
 
 ## Common Commands
 

@@ -1,6 +1,8 @@
-# Obsidian Clipper CLI
+# ClipEverything
 
 A CLI tool that clips web pages to Markdown files using `openclaw browser`.
+
+This project is derived from [obsidian-clipper](https://github.com/obsidianmd/obsidian-clipper).
 
 中文文档: [README.zh-CN.md](./README.zh-CN.md)
 
@@ -143,11 +145,6 @@ Run Zhihu-specific acceptance (zhuanlan + answer + quality checks):
 npm run clip:zhihu-acceptance
 ```
 
-## Notes
-
-- The project now targets a stable CLI clipping workflow.
-- Browser extension build scripts remain in the repository for compatibility, but the primary supported path here is CLI clipping.
-
 ## Troubleshooting
 
 If clipping fails:
@@ -158,4 +155,3 @@ If clipping fails:
    `openclaw browser --browser-profile openclaw start --json`
 3. Increase timeout, e.g. `--timeout-ms 60000`
 4. Retry with `--wait domcontentloaded`
-# ClipEverything

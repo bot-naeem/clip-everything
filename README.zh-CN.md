@@ -1,6 +1,8 @@
-# Obsidian Clipper CLI（中文说明）
+# ClipEverything
 
 基于 `openclaw browser` 的网页剪藏命令行工具，可将网页内容保存为本地 Markdown 文件。
+
+本项目衍生自 [obsidian-clipper](https://github.com/obsidianmd/obsidian-clipper)。
 
 ## 功能简介
 
@@ -136,11 +138,6 @@ npm run clip:acceptance
 ```bash
 npm run clip:zhihu-acceptance
 ```
-
-## 说明
-
-- 当前仓库主路径是稳定的 CLI 剪藏链路。
-- 扩展相关构建脚本仍保留在仓库中用于兼容，但不是当前主要使用方式。
 
 ## 常见问题排查
 
