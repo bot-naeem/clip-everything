@@ -5,10 +5,13 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 
 const { StageError } = require('../errors');
+const { jsRuntimeArgs } = require('./js-runtime');
 const { requireTool } = require('./tools');
 
 const AUTH_WALL_RE = /sign in to confirm|not a bot|login_required|use --cookies/i;
 const COOKIE_LOCK_RE = /could not copy (chrome|edge|firefox)? ?cookie database/i;
+const COOKIE_ENCRYPTED_RE = /failed to decrypt with dpapi|app-bound encryption|could not decrypt/i;
+const FORMAT_MISSING_RE = /requested format is not available|only images are available for download/i;
 const UNAVAILABLE_RE = /video unavailable|private video|members-only|this video is unavailable|removed by the uploader|age-restricted/i;
 
 function firstErrorLine(stderr) {
@@ -67,7 +70,7 @@ function run(bin, args, options = {}) {
 }
 
 function baseArgs(options = {}) {
-	const args = ['--no-playlist', '--no-warnings'];
+	const args = [options.playlist ? '--yes-playlist' : '--no-playlist', '--no-warnings'];
 	if (options.proxy) args.push('--proxy', options.proxy);
 	if (options.cookiesFile) args.push('--cookies', options.cookiesFile);
 	if (options.cookiesFromBrowser) args.push('--cookies-from-browser', options.cookiesFromBrowser);
@@ -82,10 +85,43 @@ function shorten(text, max = 90) {
 	return first.length > max ? `${first.slice(0, max - 1)}…` : first;
 }
 
+function suggestProfile(url) {
+	let host = '';
+	try {
+		host = new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
+	} catch {
+		return 'default';
+	}
+	if (/^(youtu\.be|youtube\.com|m\.youtube\.com)$/.test(host)) return 'youtube';
+	if (/^(b23\.tv|bilibili\.com|m\.bilibili\.com)$/.test(host)) return 'bilibili';
+	if (/^(twitter\.com|x\.com)$/.test(host)) return 'x';
+	return host.split('.')[0] || 'default';
+}
+
+function originOf(url) {
+	try {
+		return new URL(url).origin;
+	} catch {
+		return 'https://example.com';
+	}
+}
+
+/** The exact command a user can copy to get past a login wall. */
+function loginCommand(options = {}) {
+	const profile = options.profile || suggestProfile(options.url);
+	return `npm run login -- --profile ${profile} --url ${originOf(options.url)}`;
+}
+
 function classifyFailure(stderr) {
 	const message = firstErrorLine(stderr);
+	if (COOKIE_ENCRYPTED_RE.test(message)) {
+		return { code: 'cookie_encrypted', message };
+	}
 	if (COOKIE_LOCK_RE.test(message)) {
 		return { code: 'cookie_locked', message: 'the browser is running, so its cookie database is locked' };
+	}
+	if (FORMAT_MISSING_RE.test(message)) {
+		return { code: 'format_unavailable', message };
 	}
 	if (AUTH_WALL_RE.test(message)) {
 		return { code: 'auth_required', message };
@@ -96,22 +132,47 @@ function classifyFailure(stderr) {
 	return { code: 'failed', message };
 }
 
-function failureToError(stderr) {
+function failureToError(stderr, options = {}) {
 	const { code, message } = classifyFailure(stderr);
+	const login = loginCommand(options);
+
 	if (code === 'auth_required') {
 		const reason = /sign in to confirm[^.]*\.?/i.exec(message)?.[0] || shorten(message, 90);
+		if (options.profile) {
+			return new StageError(
+				'download',
+				`the site wants a signed-in session (${reason}). The saved session in profile ` +
+					`"${options.profile}" may have expired. Run "${login}" to refresh it, or add --login.`
+			);
+		}
 		return new StageError(
 			'download',
 			`the site wants a signed-in session (${reason}). ` +
-				'Log in with your browser, then retry with --cookies-from-browser edge ' +
-				'(close that browser first) or --cookies cookies.txt.'
+				`Run "${login}" once, then retry with --profile ${suggestProfile(options.url)}. ` +
+				'Tip: add --login to open that window automatically.'
+		);
+	}
+	if (code === 'cookie_encrypted') {
+		return new StageError(
+			'download',
+			'this browser encrypts cookies with an app-bound key, which yt-dlp cannot read. ' +
+				`Use the login window instead: "${login}", then retry with --profile ` +
+				`${options.profile || suggestProfile(options.url)} (or pass --login).`
 		);
 	}
 	if (code === 'cookie_locked') {
 		return new StageError(
 			'download',
-			`${message}. Close that browser completely and retry, or export cookies with ` +
-				'a browser extension and pass --cookies cookies.txt.'
+			`${message}. Close that browser completely and retry, or use "${login}" ` +
+				'to export a cookies.txt without touching the browser database.'
+		);
+	}
+	if (code === 'format_unavailable') {
+		return new StageError(
+			'download',
+			'yt-dlp could not solve the site\'s JavaScript challenge, so no downloadable format was returned. ' +
+				'ClipEverything passes the running Node executable automatically; if this persists, ' +
+				'install Node 20+ or set CLIP_JS_RUNTIME=node:<path-to-node>.'
 		);
 	}
 	if (code === 'unavailable') {
@@ -122,15 +183,51 @@ function failureToError(stderr) {
 
 async function probe(url, options = {}) {
 	const bin = requireTool('ytDlp', options);
-	const args = [...baseArgs(options), '--skip-download', '-J', url];
+	const args = [...baseArgs(options), ...jsRuntimeArgs(bin, options), '--skip-download', '-J', url];
 	const result = await run(bin, args, { timeoutMs: options.timeoutMs });
 
-	if (result.code !== 0) throw failureToError(result.stderr);
+	if (result.code !== 0) throw failureToError(result.stderr, options);
 
 	try {
 		return JSON.parse(result.stdout);
 	} catch {
 		throw new StageError('download', 'could not parse yt-dlp metadata (unexpected output)');
+	}
+}
+
+/**
+ * Flat playlist entries sometimes carry a full url, sometimes only an id.
+ * Keep the extraction tolerant so a single odd entry does not kill the run.
+ */
+function entryUrl(entry) {
+	if (!entry) return null;
+	if (entry.webpage_url) return entry.webpage_url;
+	if (entry.url && /^https?:/i.test(entry.url)) return entry.url;
+	if (entry.id) {
+		const key = String(entry.ie_key || entry.extractor_key || '').toLowerCase();
+		if (key.includes('youtube')) return `https://www.youtube.com/watch?v=${entry.id}`;
+	}
+	return null;
+}
+
+/** Expand a playlist/channel URL into lightweight entries (no per-video probe). */
+async function probePlaylist(url, options = {}) {
+	const bin = requireTool('ytDlp', options);
+	const args = [
+		...baseArgs({ ...options, playlist: true }),
+		...jsRuntimeArgs(bin, options),
+		'--flat-playlist',
+		'-J',
+		url,
+	];
+	const result = await run(bin, args, { timeoutMs: options.timeoutMs });
+
+	if (result.code !== 0) throw failureToError(result.stderr, options);
+
+	try {
+		return JSON.parse(result.stdout);
+	} catch {
+		throw new StageError('download', 'could not parse yt-dlp playlist metadata (unexpected output)');
 	}
 }
 
@@ -204,6 +301,7 @@ async function downloadSubtitles(url, track, dir, options = {}) {
 	const format = preferredFormat(track.formats);
 	const args = [
 		...baseArgs(options),
+		...jsRuntimeArgs(bin, options),
 		'--skip-download',
 		track.automatic ? '--write-auto-subs' : '--write-subs',
 		'--sub-langs',
@@ -216,7 +314,7 @@ async function downloadSubtitles(url, track, dir, options = {}) {
 	];
 
 	const result = await run(bin, args, { timeoutMs: options.timeoutMs });
-	if (result.code !== 0) throw failureToError(result.stderr);
+	if (result.code !== 0) throw failureToError(result.stderr, options);
 
 	const files = listFiles(dir).filter((file) => !/\.(part|ytdl)$/.test(file));
 	const match =
@@ -238,6 +336,7 @@ async function downloadAudio(url, dir, options = {}) {
 	const target = path.join(dir, 'audio.%(ext)s');
 	const args = [
 		...baseArgs(options),
+		...jsRuntimeArgs(bin, options),
 		'-f',
 		'bestaudio[ext=m4a]/bestaudio/best',
 		'-o',
@@ -255,7 +354,7 @@ async function downloadAudio(url, dir, options = {}) {
 				}
 			: undefined,
 	});
-	if (result.code !== 0) throw failureToError(result.stderr);
+	if (result.code !== 0) throw failureToError(result.stderr, options);
 
 	const audio = listFiles(dir).find((file) => /^audio\.(m4a|webm|opus|mp3|wav|aac|ogg|flac)$/i.test(path.basename(file)));
 	if (!audio) throw new StageError('download', 'yt-dlp reported success but no audio file was written');
@@ -267,10 +366,12 @@ module.exports = {
 	classifyFailure,
 	downloadAudio,
 	downloadSubtitles,
+	entryUrl,
 	failureToError,
 	languageMatches,
 	pickSubtitleTrack,
 	preferredFormat,
 	probe,
+	probePlaylist,
 	run,
 };

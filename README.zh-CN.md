@@ -171,6 +171,7 @@ npm run clip -- --video "https://www.youtube.com/watch?v=..." --profile youtube
 ```bash
 npm run setup:video                                   # 一次性安装，约 600 MB
 npm run clip -- --video "https://www.youtube.com/watch?v=..."
+npm run clip -- --video "https://www.youtube.com/watch?v=..." --login   # 登录一次后直接转写
 npm run clip -- --video "https://www.bilibili.com/video/BV..." --lang zh --save-srt
 ```
 
@@ -207,6 +208,13 @@ transcript: "auto captions (en)"
 2. 自动字幕
 3. 语音转写（`--whisper-model`，默认 `small`）
 
+**整门课程。** 加 `--playlist` 会把课程播放列表逐讲转写，每讲一份笔记，并在同目录生成 `00-Index.md`。单讲失败只会记进索引，不会中断整批：
+
+```bash
+npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --profile youtube
+npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --limit 3
+```
+
 YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再按超过 2.5 秒的停顿合并成段落，所以读起来是文章而不是一行一句。`--save-srt` 会把清洗后的字幕同时写成 `.srt`。
 
 | 选项 | 默认 | 说明 |
@@ -221,11 +229,16 @@ YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再
 | `--cookies-from-browser <name>` | 关闭 | 复用浏览器登录态（`edge`、`chrome`、`firefox`） |
 | `--cookies <file>` | 关闭 | Netscape 格式 `cookies.txt` |
 | `--profile <name>` | 关闭 | 使用 `npm run login -- --profile <name>` 导出的 `cookies.txt` |
+| `--login` | 关闭 | 打开浏览器登录当前站点，登完继续转写 |
+| `--playlist` | 关闭 | 把播放列表里的每个视频都转写 |
+| `--limit <n>` | 全部 | 配合 `--playlist`，只转前 `n` 个 |
 | `--threads <n>` | CPU 核数 - 1 | whisper.cpp 线程数 |
 
-两个实际会遇到的问题：
+三个实际会遇到的问题：
 
-- **YouTube 机器人墙。** 数据中心/代理 IP 的匿名请求经常被要求登录（`Sign in to confirm you're not a bot`）。先用 `npm run login -- --profile youtube --url https://www.youtube.com` 登录一次，再用 `--profile youtube`；程序也会自动尝试已安装浏览器的 Cookie。
+- **YouTube 机器人墙。** 数据中心/代理 IP 的匿名请求经常被要求登录（`Sign in to confirm you're not a bot`）。最省事的是加 `--login`：`npm run clip -- --video "<url>" --login`，窗口里登好、关掉，程序自动保存到 `~/.clip-everything/profiles/youtube/cookies.txt` 并继续。以后直接用 `--profile youtube` 复用。
+- **别再指望直接读浏览器 Cookie。** Edge/Chrome 127+ 用 app-bound key 加密 Cookie，`--cookies-from-browser edge` 会报 `Failed to decrypt with DPAPI`；浏览器开着时数据库还会被锁。请用 `--login`，或用扩展导出的 `cookies.txt` 配合 `--cookies`。
+- **JS 运行时。** YouTube 需要 JS 运行时来解 `n` challenge。ClipEverything 会自动把当前 Node 可执行文件传给 yt-dlp；可用 `CLIP_JS_RUNTIME=deno` 覆盖，或 `CLIP_JS_RUNTIME=none` 关闭。
 - **速度。** `small` 模型在 CPU 上大约是 1/5–1/2 倍速；`medium` 更准但慢约 3 倍。有字幕时是秒级。
 
 ## 开发
@@ -276,6 +289,24 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 **`site returned a wall instead of content`**
 
 页面在登录墙/验证码后面。先用 `npm run login -- --profile <名字>` 登录一次，再用同一个 `--profile` 剪。
+
+**视频：`Sign in to confirm you're not a bot`**
+
+YouTube 对很多代理/机房 IP 会拦匿名请求。直接加 `--login`：
+
+```bash
+npm run clip -- --video "<url>" --login
+```
+
+窗口里登录、关掉，转写会自动继续。以后用 `--profile youtube` 复用。
+
+**视频：`Requested format is not available`**
+
+yt-dlp 没能解开 YouTube 的 JS challenge。ClipEverything 会自动把当前 Node 传给 yt-dlp；如果仍然报错，确认 `node --version` 是 20+，或手动设 `CLIP_JS_RUNTIME=node:C:\path\to\node.exe`。`CLIP_JS_RUNTIME=none` 可关闭该参数。
+
+**视频：`Failed to decrypt with DPAPI`**
+
+Edge/Chrome 127+ 用 app-bound key 加密 Cookie，yt-dlp 读不了。改用 `--login`，或用浏览器扩展导出 `cookies.txt` 后传 `--cookies <文件>`。
 
 **剪藏先等约 30 秒，然后警告 `networkidle never settled`**
 

@@ -85,6 +85,30 @@ describe('--profile cookie export', () => {
 		const { home } = makeHome();
 		expect(() => parseVideoArgs([URL, '--profile', 'youtube'], { cwd: env.cwd, homedir: home })).toThrow(/npm run login/);
 	});
+
+	it('derives a per-site profile when --login is used', () => {
+		const { home } = makeHome();
+		const options = parseVideoArgs([URL, '--login'], { cwd: env.cwd, homedir: home });
+		expect(options.login).toBe(true);
+		expect(options.profile).toBe('youtube');
+	});
+
+	it('lets --login create a missing profile instead of failing', () => {
+		const { home } = makeHome();
+		const options = parseVideoArgs([URL, '--profile', 'youtube', '--login'], { cwd: env.cwd, homedir: home });
+		expect(options.cookiesFile).toBeNull();
+		expect(options.profile).toBe('youtube');
+	});
+});
+
+describe('defaultProfileFor', () => {
+	it('maps common video hosts to short profile names', () => {
+		expect(videoArgs.defaultProfileFor('https://youtu.be/abc')).toBe('youtube');
+		expect(videoArgs.defaultProfileFor('https://www.youtube.com/watch?v=abc')).toBe('youtube');
+		expect(videoArgs.defaultProfileFor('https://www.bilibili.com/video/BV1xx')).toBe('bilibili');
+		expect(videoArgs.defaultProfileFor('https://x.com/user/status/1')).toBe('x');
+		expect(videoArgs.defaultProfileFor('https://vimeo.com/123')).toBe('vimeo');
+	});
 });
 
 describe('toNetscape', () => {

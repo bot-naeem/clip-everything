@@ -15,7 +15,8 @@
 | `lib/naming.js` | Filename sanitising, token rendering, unique paths |
 | `lib/frontmatter.js` | YAML frontmatter (pages and video notes) |
 | `lib/media/tools.js` | Locate yt-dlp/ffmpeg/whisper and models |
-| `lib/media/ytdlp.js` | Probe, caption download, audio download |
+| `lib/media/js-runtime.js` | Pass a JS runtime to yt-dlp for YouTube's n challenge |
+| `lib/media/ytdlp.js` | Probe, caption download, audio download, error classification |
 | `lib/media/whisper.js` | ffmpeg → 16 kHz wav → whisper-cli |
 | `lib/media/subtitles.js` | VTT/JSON3/SRT parsing, caption dedupe, paragraphs |
 | `lib/errors.js` | `StageError` |

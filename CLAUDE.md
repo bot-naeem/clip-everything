@@ -21,6 +21,8 @@ npm install                 # install deps
 npm run install-browser     # only if neither Chrome nor Edge is present
 npm run clip -- <url>       # clip one page -> ./clips/<title>.md
 npm run clip -- --video <url>       # transcribe a video -> ./clips/<title>.md
+npm run clip -- --video <url> --login  # sign in once (YouTube), then transcribe
+npm run clip -- --video <playlist> --playlist  # whole course + 00-Index.md
 npm run setup:video         # yt-dlp + ffmpeg + whisper.cpp + model (~600 MB)
 npm run login -- --profile <name>   # visible browser, saves cookies on close
 npm test                    # vitest (tests/)
@@ -50,7 +52,8 @@ scripts/lib/markdown.js    obsidian-clipper converter bridge (ts-node) + Turndow
 scripts/lib/naming.js      filename sanitising, token rendering, unique paths, getDomain
 scripts/lib/frontmatter.js YAML block (pages and video notes)
 scripts/lib/media/tools.js    locate yt-dlp/ffmpeg/whisper + models (env overrides)
-scripts/lib/media/ytdlp.js    probe, caption download, audio download
+scripts/lib/media/js-runtime.js  hand yt-dlp a JS runtime (node) for YouTube's n challenge
+scripts/lib/media/ytdlp.js    probe, caption download, audio download, error classification
 scripts/lib/media/whisper.js  ffmpeg -> 16 kHz wav -> whisper-cli
 scripts/lib/media/subtitles.js VTT/JSON3/SRT parsing, rolling-caption dedupe, paragraphs
 scripts/lib/errors.js      StageError(stage, message, cause)
@@ -80,12 +83,25 @@ ffmpeg + whisper.cpp (speech-to-text). Stages are `start`, `download`,
 - Caption formats (json3, vtt, srt) all funnel through `parseSubtitles()` and then
   `normalizeCues()`. Auto captions repeat the previous line, so dedupe is not
   optional — keep it covered by `tests/subtitles.test.js`.
-- YouTube walls anonymous datacenter/proxy IPs behind a login check; `probeWithAuth`
-  retries with cookies from an installed browser before failing. `--profile <name>`
-  reuses the `cookies.txt` that `login` exports, which avoids the browser's locked
-  cookie database entirely.
+- YouTube walls anonymous datacenter/proxy IPs behind a login check. `--login`
+  opens the same visible window as `npm run login`, waits for it to close, and
+  verifies a real session cookie (not just anonymous `YSC`/`VISITOR_INFO1_LIVE`)
+  before continuing. `--profile <name>` reuses the exported `cookies.txt`, which
+  avoids the browser's locked cookie database entirely.
+- `--cookies-from-browser` is best-effort only: Edge/Chrome 127+ use app-bound
+  cookie encryption, so yt-dlp fails with `Failed to decrypt with DPAPI`. The
+  error classifier maps that to the `--login` path instead of suggesting a
+  workaround that cannot work.
+- yt-dlp needs a JavaScript runtime for YouTube's `n` challenge, otherwise it
+  returns "Requested format is not available" even for metadata. `js-runtime.js`
+  passes `--js-runtimes node:<process.execPath>` after probing whether the
+  installed yt-dlp supports the flag. `CLIP_JS_RUNTIME` overrides it (`none` disables).
 - `--proxy auto` probes common local ports (7890, 7897, 10809, 1080) and only uses
   one that is actually listening.
+- `--playlist` expands the URL with `yt-dlp --flat-playlist -J`, then reuses the
+  single-video path for each entry with `login: false` (so the login window opens
+  at most once). Per-video failures go into `failures[]` and the generated
+  `00-Index.md`; they never abort the batch. `--limit n` is for previewing.
 
 ## Conventions
 

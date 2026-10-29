@@ -179,6 +179,7 @@ there are none, and whisper.cpp transcribes it.
 ```bash
 npm run setup:video                                   # one-time, ~600 MB
 npm run clip -- --video "https://www.youtube.com/watch?v=..."
+npm run clip -- --video "https://www.youtube.com/watch?v=..." --login   # sign in once, then transcribe
 npm run clip -- --video "https://www.bilibili.com/video/BV..." --lang zh --save-srt
 ```
 
@@ -215,6 +216,15 @@ Route selection, in order:
 2. automatic captions matching `--lang`
 3. speech-to-text with `--whisper-model` (default `small`)
 
+**Whole playlists.** `--playlist` expands a course playlist, writes one note per
+video, and drops a `00-Index.md` next to them. A failed video is recorded in the
+index instead of aborting the run:
+
+```bash
+npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --profile youtube
+npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --limit 3
+```
+
 YouTube's rolling auto-captions (each cue repeats the previous one) are collapsed
 before the text is grouped into paragraphs on pauses longer than 2.5 s, so the
 note reads like prose instead of one line per cue. `--save-srt` writes the
@@ -232,15 +242,26 @@ cleaned cues next to the note.
 | `--cookies-from-browser <name>` | off | Reuse a browser session (`edge`, `chrome`, `firefox`) |
 | `--cookies <file>` | off | Netscape `cookies.txt` |
 | `--profile <name>` | off | Use the `cookies.txt` exported by `npm run login -- --profile <name>` |
+| `--login` | off | Open a browser to sign in for this site, then continue |
+| `--playlist` | off | Transcribe every video in a playlist URL |
+| `--limit <n>` | all | With `--playlist`, stop after `n` videos |
 | `--threads <n>` | CPU count - 1 | whisper.cpp threads |
 
-Two practical notes:
+Three practical notes:
 
 - **YouTube bot wall.** Anonymous requests from datacenter or proxy IPs often get
-  `Sign in to confirm you're not a bot`. Sign in once with
-  `npm run login -- --profile youtube --url https://www.youtube.com` and pass
-  `--profile youtube`; ClipEverything also retries with cookies from an installed
-  browser automatically.
+  `Sign in to confirm you're not a bot`. The shortest path is one command:
+  `npm run clip -- --video "<url>" --login`. It opens a browser, saves the session
+  to `~/.clip-everything/profiles/youtube/cookies.txt`, and carries on. Later runs
+  can reuse it with `--profile youtube`.
+- **Browser cookie databases are not a shortcut any more.** Edge/Chrome 127+
+  encrypt cookies with an app-bound key, so `--cookies-from-browser edge` fails
+  with `Failed to decrypt with DPAPI`, and a running browser locks the file anyway.
+  Use `--login` (or a `cookies.txt` exported by an extension, via `--cookies`).
+- **JavaScript runtime.** YouTube needs a JS runtime to solve its `n` challenge.
+  ClipEverything passes the Node executable that is running the CLI to yt-dlp
+  automatically; override with `CLIP_JS_RUNTIME=deno`, or disable with
+  `CLIP_JS_RUNTIME=none`.
 - **Speed.** `small` runs on CPU at roughly 1/5–1/2 of realtime; `medium` is more
   accurate and about 3× slower. Captions, when present, are instant.
 
@@ -294,6 +315,30 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 The page is behind a login or captcha. Sign in once with `npm run login -- --profile <name>`
 and clip with the same `--profile`.
+
+**Video: `Sign in to confirm you're not a bot`**
+
+YouTube blocks anonymous requests from many proxy/datacenter IPs. Add `--login`:
+
+```bash
+npm run clip -- --video "<url>" --login
+```
+
+Sign in in the window, close it, and the transcript continues automatically.
+Later runs reuse the saved session with `--profile youtube`.
+
+**Video: `Requested format is not available`**
+
+yt-dlp could not solve YouTube's JavaScript challenge. ClipEverything passes the
+running Node executable automatically; if it still happens, check `node --version`
+(20+) or set `CLIP_JS_RUNTIME=node:C:\path\to\node.exe`. `CLIP_JS_RUNTIME=none`
+turns the flag off for custom yt-dlp builds.
+
+**Video: `Failed to decrypt with DPAPI`**
+
+Edge/Chrome 127+ encrypt cookies with an app-bound key that yt-dlp cannot read.
+Use `--login` instead of `--cookies-from-browser`, or export a `cookies.txt` with
+a browser extension and pass `--cookies <file>`.
 
 **The clip waits ~30s then warns `networkidle never settled`**
 

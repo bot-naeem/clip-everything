@@ -40,6 +40,9 @@ const USAGE = [
 	'  --cookies-from-browser <name>  Reuse a browser session, e.g. edge, chrome, firefox',
 	'  --cookies <file>               Netscape cookies.txt exported from a browser',
 	'  --profile <name>               Use cookies.txt saved by "npm run login -- --profile <name>"',
+	'  --login                        Open a browser to sign in for this site, then continue',
+	'  --playlist                     Transcribe every video in a playlist URL',
+	'  --limit <n>                    With --playlist, stop after the first n videos',
 	'  --threads <n>                  whisper.cpp threads (default: CPU count)',
 	'  --timeout-ms <n>               Per-step timeout (default: 600000)',
 	'  --frontmatter                  Include YAML frontmatter (default: on)',
@@ -75,6 +78,25 @@ function envProxy(env) {
 	return env.HTTPS_PROXY || env.https_proxy || env.HTTP_PROXY || env.http_proxy || env.ALL_PROXY || env.all_proxy || null;
 }
 
+const PROFILE_ALIASES = [
+	[/^(youtu\.be|youtube\.com|m\.youtube\.com)$/i, 'youtube'],
+	[/^(b23\.tv|bilibili\.com|m\.bilibili\.com)$/i, 'bilibili'],
+	[/^(twitter\.com|x\.com)$/i, 'x'],
+];
+
+/** `--login` without `--profile` picks a stable, per-site profile name. */
+function defaultProfileFor(url) {
+	try {
+		const host = new URL(url).hostname.replace(/^www\./i, '').toLowerCase();
+		for (const [pattern, name] of PROFILE_ALIASES) {
+			if (pattern.test(host)) return name;
+		}
+		return host.split('.')[0].replace(/[^a-z0-9-]/g, '') || 'default';
+	} catch {
+		return 'default';
+	}
+}
+
 function parseVideoArgs(argv, env = {}) {
 	const cwd = env.cwd || process.cwd();
 	const homedir = env.homedir || os.homedir();
@@ -100,6 +122,9 @@ function parseVideoArgs(argv, env = {}) {
 		cookiesFile: null,
 		cookiesFromBrowser: null,
 		profile: null,
+		login: false,
+		playlist: false,
+		limit: 0,
 		threads: 0,
 		timeoutMs: 600000,
 		frontmatter: true,
@@ -164,6 +189,16 @@ function parseVideoArgs(argv, env = {}) {
 			case '--profile':
 				options.profile = requireValue(args, ++i, arg);
 				break;
+			case '--login':
+				options.login = true;
+				break;
+			case '--playlist':
+				options.playlist = true;
+				break;
+			case '--limit':
+				options.limit = Number(requireValue(args, ++i, arg)) || 0;
+				if (options.limit < 1) fail('--limit must be a positive number');
+				break;
 			case '--threads':
 				options.threads = Number(requireValue(args, ++i, arg)) || 0;
 				break;
@@ -201,18 +236,23 @@ function parseVideoArgs(argv, env = {}) {
 	options.cookiesFile = options.cookiesFile ? path.resolve(cwd, options.cookiesFile) : null;
 	options.threads = options.threads || Math.max(1, Math.min(8, os.cpus().length - 1));
 
+	// --login picks a per-site profile, so "youtube" is reused on the next run.
+	if (options.login && !options.profile) options.profile = defaultProfileFor(options.url);
+
 	// --profile reuses the login command's exported cookies.txt, so yt-dlp does
 	// not have to read (and fight over) the browser's locked cookie database.
 	if (options.profile && !options.cookiesFile && !options.cookiesFromBrowser) {
 		const profileDir = resolveProfileDir(options.profile, homedir);
 		const cookies = path.join(profileDir, 'cookies.txt');
-		if (!fs.existsSync(cookies)) {
+		if (fs.existsSync(cookies)) {
+			options.cookiesFile = cookies;
+		} else if (!options.login) {
 			fail(
 				`no cookies.txt in profile "${options.profile}". ` +
-					`Run "npm run login -- --profile ${options.profile} --url https://www.youtube.com" first.`
+					`Run "npm run login -- --profile ${options.profile} --url ${parsed.origin}" first, ` +
+					'or add --login to open that window automatically.'
 			);
 		}
-		options.cookiesFile = cookies;
 	}
 
 	return options;
@@ -260,6 +300,7 @@ module.exports = {
 	DEFAULT_LANGS,
 	PROXY_CANDIDATES,
 	USAGE,
+	defaultProfileFor,
 	detectLocalProxy,
 	parseVideoArgs,
 	resolveProxy,

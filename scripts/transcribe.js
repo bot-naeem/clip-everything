@@ -16,14 +16,16 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 
 const { StageError } = require('./lib/errors');
 const { buildVideoFrontmatter } = require('./lib/frontmatter');
 const { getDomain, renderFilename, uniquePath, writeMarkdownFile } = require('./lib/naming');
+const { resolveProfileDir } = require('./lib/args');
 const subtitles = require('./lib/media/subtitles');
 const whisper = require('./lib/media/whisper');
 const ytdlp = require('./lib/media/ytdlp');
-const { parseVideoArgs, resolveProxy, USAGE } = require('./lib/video-args');
+const { defaultProfileFor, parseVideoArgs, resolveProxy, USAGE } = require('./lib/video-args');
 
 const pkg = require('../package.json');
 
@@ -162,6 +164,63 @@ function installedBrowsers() {
 }
 
 /**
+ * `--login` opens the same visible window as `npm run login`, for the video's
+ * own origin, and waits for it to close. That keeps the "one command" path
+ * working on sites that block anonymous requests (YouTube in particular).
+ */
+function runLoginWindow(profile, origin) {
+	const script = path.join(__dirname, 'login.js');
+	return new Promise((resolve, reject) => {
+		const child = spawn(process.execPath, [script, '--profile', profile, '--url', origin], { stdio: 'inherit' });
+		child.once('error', reject);
+		child.once('close', (code) => {
+			if (code === 0) resolve();
+			else reject(new StageError('login', `the login window exited with code ${code}`));
+		});
+	});
+}
+
+const YOUTUBE_AUTH_COOKIES = /^(SID|HSID|SSID|SAPISID|LOGIN_INFO|__Secure-1PSID|__Secure-3PSID)$/;
+
+/** A cookies.txt can exist and still be anonymous — that is what bit us on YouTube. */
+function looksSignedIn(file, origin) {
+	try {
+		const text = fs.readFileSync(file, 'utf8');
+		if (!/youtube\.com|google\.com/i.test(origin)) return true;
+		return text
+			.split(/\r?\n/)
+			.filter((line) => line && !line.startsWith('#'))
+			.some((line) => YOUTUBE_AUTH_COOKIES.test(line.split('\t')[5] || ''));
+	} catch {
+		return false;
+	}
+}
+
+async function ensureLogin(options, log) {
+	if (!options.login) return;
+
+	const origin = new URL(options.url).origin;
+	const profile = options.profile || defaultProfileFor(options.url);
+	log(`opening a browser to sign in for ${origin} (profile: ${profile})`);
+	await runLoginWindow(profile, origin);
+
+	const cookies = path.join(resolveProfileDir(profile), 'cookies.txt');
+	if (!fs.existsSync(cookies)) {
+		throw new StageError('login', 'the login window closed but no cookies.txt was written');
+	}
+	if (!looksSignedIn(cookies, origin)) {
+		throw new StageError(
+			'login',
+			'the login window closed, but no signed-in session was found (only anonymous cookies). ' +
+				'Run with --login again and finish the Google sign-in before closing the window.'
+		);
+	}
+	options.profile = profile;
+	options.cookiesFile = cookies;
+	log(`session saved: ${cookies}`);
+}
+
+/**
  * Anonymous requests from datacenter/proxy IPs hit YouTube's bot wall. When that
  * happens, retry with cookies from an installed browser before giving up.
  */
@@ -171,7 +230,7 @@ async function probeWithAuth(options, warn) {
 		return { info, auth: {} };
 	} catch (error) {
 		const explicit = options.cookiesFromBrowser || options.cookiesFile;
-		const recoverable = /wants a signed-in session|locked/i.test(error.message || '');
+		const recoverable = /wants a signed-in session|locked|decrypt|app-bound/i.test(error.message || '');
 		if (explicit || !recoverable) throw error;
 
 		const failures = [];
@@ -269,6 +328,8 @@ async function collectTranscript(options, info, auth, tmpDir, warn, log) {
 }
 
 async function runVideo(options, warn, log) {
+	await ensureLogin(options, log);
+
 	const probed = await probeWithAuth(options, warn);
 	const info = probed.info;
 
@@ -310,6 +371,106 @@ async function runVideo(options, warn, log) {
 	}
 }
 
+function escapeCell(value) {
+	return String(value || '')
+		.replace(/\|/g, '\\|')
+		.replace(/\r?\n/g, ' ')
+		.trim();
+}
+
+/** Pure so the index layout can be unit-tested without touching the filesystem. */
+function renderPlaylistIndex(list, items, failures = []) {
+	const title = String(list.title || 'Playlist').trim();
+	const source = list.webpage_url || list.original_url || '';
+	const lines = [
+		'---',
+		`title: ${JSON.stringify(title)}`,
+		`source: ${JSON.stringify(source)}`,
+		`transcribed_at: ${JSON.stringify(new Date().toISOString())}`,
+		'---',
+		'',
+		`# ${title}`,
+		'',
+		`共 ${items.length} 讲${failures.length ? `，${failures.length} 讲失败` : ''}。`,
+		'',
+		'| # | 标题 | 时长 | 文件 |',
+		'| --- | --- | --- | --- |',
+	];
+
+	items.forEach((item, index) => {
+		const name = path.basename(item.outputPath || '');
+		lines.push(
+			`| ${index + 1} | ${escapeCell(item.title)} | ${item.duration || ''} | ` +
+				`[${escapeCell(name)}](<${name}>) |`
+		);
+	});
+
+	if (failures.length) {
+		lines.push('', '## 失败', '');
+		for (const failure of failures) {
+			lines.push(`- ${escapeCell(failure.title)} — ${escapeCell(failure.error)}`);
+		}
+	}
+
+	lines.push('');
+	return lines.join('\n');
+}
+
+/**
+ * A playlist is just N independent single-video runs plus an index. Per-video
+ * failures are collected instead of aborting the whole course.
+ */
+async function runPlaylist(options, warn, log) {
+	await ensureLogin(options, log);
+
+	const list = await ytdlp.probePlaylist(options.url, options);
+	const entries = (list.entries || []).filter(Boolean);
+	if (!entries.length) {
+		throw new StageError('download', 'this URL has no playlist entries — drop --playlist for a single video');
+	}
+
+	const selected = options.limit > 0 ? entries.slice(0, options.limit) : entries;
+	log(`playlist: ${list.title || '(untitled)'} — ${selected.length}/${entries.length} videos`);
+
+	const items = [];
+	const failures = [];
+
+	for (let index = 0; index < selected.length; index++) {
+		const entry = selected[index];
+		const url = ytdlp.entryUrl(entry);
+		const label = entry.title || url || `#${index + 1}`;
+
+		if (!url) {
+			failures.push({ title: label, error: 'could not build a video url from this entry' });
+			warn('item_failed', `${label}: no url`);
+			continue;
+		}
+
+		log(`[${index + 1}/${selected.length}] ${label}`);
+		try {
+			// eslint-disable-next-line no-await-in-loop
+			const result = await runVideo({ ...options, url, playlist: false, login: false }, warn, log);
+			items.push({
+				title: result.info.title || label,
+				url,
+				outputPath: result.outputPath,
+				duration: result.meta.duration,
+				paragraphs: result.transcript.paragraphs,
+			});
+		} catch (error) {
+			const message = describeError(error);
+			failures.push({ title: label, url, error: message });
+			warn('item_failed', `${label}: ${message}`);
+		}
+	}
+
+	fs.mkdirSync(options.outputDir, { recursive: true });
+	const indexPath = uniquePath(path.join(options.outputDir, '00-Index.md'));
+	fs.writeFileSync(indexPath, renderPlaylistIndex(list, items, failures), 'utf8');
+
+	return { list, items, failures, indexPath };
+}
+
 async function main(argv = process.argv.slice(2)) {
 	const startMs = Date.now();
 	const warnings = [];
@@ -339,6 +500,32 @@ async function main(argv = process.argv.slice(2)) {
 
 	try {
 		options.proxy = await resolveProxy(options, log);
+
+		if (options.playlist) {
+			const batch = await runPlaylist(options, warn, log);
+			process.stdout.write(
+				`${JSON.stringify(
+					{
+						ok: batch.items.length > 0,
+						playlist: true,
+						url: options.url,
+						title: batch.list.title,
+						count: batch.items.length,
+						failed: batch.failures.length,
+						indexPath: batch.indexPath,
+						items: batch.items,
+						failures: batch.failures,
+						warnings,
+						elapsedMs: Date.now() - startMs,
+					},
+					null,
+					2
+				)}\n`
+			);
+			if (!batch.items.length) process.exitCode = 1;
+			return;
+		}
+
 		const result = await runVideo(options, warn, log);
 
 		process.stdout.write(
@@ -386,4 +573,11 @@ if (require.main === module) {
 	main();
 }
 
-module.exports = { buildMarkdown, collectTranscript, main, siteLabel };
+module.exports = {
+	buildMarkdown,
+	collectTranscript,
+	main,
+	renderPlaylistIndex,
+	runPlaylist,
+	siteLabel,
+};
