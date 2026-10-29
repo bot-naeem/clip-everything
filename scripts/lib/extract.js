@@ -247,6 +247,9 @@ async function extract(page, options) {
 			const probe = await page.evaluate(pageProbe);
 			payload.url = payload.url || probe.url;
 			payload.title = payload.title || probe.title;
+			if (handler && typeof handler.cleanTitle === 'function') {
+				payload.title = handler.cleanTitle(payload.title, payload.url) || payload.title;
+			}
 			payload.domain = payload.domain || getDomain(payload.url);
 			payload.extractor = attempt.name;
 			return payload;

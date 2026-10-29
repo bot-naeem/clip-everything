@@ -6,7 +6,7 @@ import sites from '../scripts/lib/sites.js';
 
 const { convertToMarkdown, trimZhihuArticleTail } = markdown;
 const { resolveAttempts } = browser;
-const { findHandler } = sites;
+const { cleanZhihuTitle, findHandler } = sites;
 
 describe('convertToMarkdown', () => {
 	it('converts headings and paragraphs', () => {
@@ -64,6 +64,20 @@ describe('findHandler', () => {
 
 	it('returns null for generic sites', () => {
 		expect(findHandler('https://example.com/post')).toBeNull();
+	});
+});
+
+describe('cleanZhihuTitle', () => {
+	it('strips the unread-message prefix and the site suffix', () => {
+		expect(cleanZhihuTitle('(3 封私信) 万字详解 Search Agent - 知乎')).toBe('万字详解 Search Agent');
+	});
+
+	it('strips the zhuanlan suffix too', () => {
+		expect(cleanZhihuTitle('某篇文章 - 知乎专栏')).toBe('某篇文章');
+	});
+
+	it('leaves clean titles untouched', () => {
+		expect(cleanZhihuTitle('普通标题')).toBe('普通标题');
 	});
 });
 

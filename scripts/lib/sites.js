@@ -129,6 +129,7 @@ const handlers = [
 		},
 		ready: pageZhihuAnswerReady,
 		extract: pageZhihuAnswerExtract,
+		cleanTitle: cleanZhihuTitle,
 	},
 	{
 		id: 'zhihu-zhuanlan',
@@ -136,6 +137,7 @@ const handlers = [
 			return /(^|\.)zhuanlan\.zhihu\.com$/.test(url.hostname) && url.pathname.startsWith('/p/');
 		},
 		extract: pageZhihuZhuanlanExtract,
+		cleanTitle: cleanZhihuTitle,
 	},
 	{
 		id: 'x-status',
@@ -145,12 +147,24 @@ const handlers = [
 	},
 ];
 
+/**
+ * Logged-in Zhihu pages prefix the document title with "(3 封私信)" and suffix
+ * it with " - 知乎"; both leak into the note title and filename.
+ */
+function cleanZhihuTitle(title) {
+	return String(title || '')
+		.replace(/^\(\s*\d+\s*(?:封私信|条消息|个通知|条通知)\s*\)\s*/, '')
+		.replace(/\s*[-–—]\s*知乎(?:专栏)?\s*$/, '')
+		.trim();
+}
+
 function findHandler(url) {
 	const parsed = url instanceof URL ? url : new URL(String(url));
 	return handlers.find((handler) => handler.match(parsed)) || null;
 }
 
 module.exports = {
+	cleanZhihuTitle,
 	findHandler,
 	handlers,
 };
