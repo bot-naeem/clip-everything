@@ -137,13 +137,23 @@ Defuddle 的 bundle 通过 CDP `Runtime.evaluate` 注入，不受页面 CSP 限�
 
 ## 需要登录的页面
 
-Profile 存在 `~/.clip-everything/profiles/<name>`。先用 `--headed` 跑一次并登录，之后复用：
+Profile 存在 `~/.clip-everything/profiles/<name>`。第一次用 `login` 命令登录一次——它会弹出一个可见的浏览器窗口，关掉窗口时保存会话：
 
 ```bash
-npm run clip -- "https://x.com/i/status/123" --headed --profile x
+npm run login -- --profile zhihu            # 打开 https://www.zhihu.com
+npm run login -- --profile x --url https://x.com
+```
+
+之后复用这个 profile：
+
+```bash
+npm run clip -- "https://zhuanlan.zhihu.com/p/123" --profile zhihu
+npm run clip -- "https://x.com/user/status/123" --profile x
 ```
 
 一次性匿名剪藏用 `--no-persist`。
+
+如果站点返回验证码/登录墙，CLI 会以 `site returned a wall instead of content` 中止并提示先登录，不会写出一个内容错误的笔记。
 
 ## 开发
 

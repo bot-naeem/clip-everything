@@ -1,0 +1,120 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * Open a visible browser with a persistent profile so you can sign in once.
+ * Cookies are written to ~/.clip-everything/profiles/<name> when the window closes.
+ *
+ *   npm run login -- --profile zhihu
+ *   npm run login -- --profile x --url https://x.com
+ */
+
+const os = require('node:os');
+
+const { BROWSER_CHOICES, resolveProfileDir } = require('./lib/args');
+const { launch, openPage, close } = require('./lib/browser');
+
+const DEFAULT_URL = 'https://www.zhihu.com';
+
+const USAGE = [
+	'Open a browser window to sign in, then close it to save the session.',
+	'',
+	'Usage:',
+	'  npm run login -- [--profile <name>] [--browser <name>] [--url <url>]',
+	'',
+	'Options:',
+	'  --profile <name>   Profile to write cookies into (default: default)',
+	'  --browser <name>   auto | chromium | chrome | msedge (default: auto)',
+	'  --url <url>        Page to open (default: https://www.zhihu.com)',
+	'  --help, -h',
+].join('\n');
+
+function parseArgs(argv) {
+	const options = { profile: 'default', browser: 'auto', url: DEFAULT_URL, help: false };
+
+	for (let i = 0; i < argv.length; i++) {
+		const arg = argv[i];
+		if (arg === '--help' || arg === '-h') {
+			options.help = true;
+			continue;
+		}
+		if (arg === '--profile' || arg === '--browser' || arg === '--url') {
+			const value = argv[++i];
+			if (!value || value.startsWith('--')) throw new Error(`Missing value for ${arg}`);
+			if (arg === '--profile') options.profile = value;
+			if (arg === '--browser') options.browser = value.toLowerCase();
+			if (arg === '--url') options.url = value;
+			continue;
+		}
+		throw new Error(`Unknown argument: ${arg}`);
+	}
+
+	if (!BROWSER_CHOICES.includes(options.browser)) {
+		throw new Error(`Invalid --browser value "${options.browser}". Use ${BROWSER_CHOICES.join(' | ')}`);
+	}
+	try {
+		options.url = new URL(options.url).toString();
+	} catch {
+		throw new Error(`Invalid --url: ${options.url}`);
+	}
+
+	options.profileDir = resolveProfileDir(options.profile, os.homedir());
+	return options;
+}
+
+function waitForClose(context) {
+	return new Promise((resolve) => {
+		context.once('close', resolve);
+		process.once('SIGINT', resolve);
+		process.once('SIGTERM', resolve);
+	});
+}
+
+async function main() {
+	let options;
+	try {
+		options = parseArgs(process.argv.slice(2));
+	} catch (error) {
+		process.stderr.write(`[error] ${error.message}\n\n${USAGE}\n`);
+		process.exitCode = 1;
+		return;
+	}
+
+	if (options.help) {
+		process.stdout.write(`${USAGE}\n`);
+		return;
+	}
+
+	const handle = await launch({ ...options, headless: false, persist: true });
+	try {
+		const page = await openPage(handle, { timeoutMs: 60000 });
+		await page.goto(options.url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {
+			// Some sites keep loading forever; the window is open, that is what matters.
+		});
+
+		process.stdout.write(
+			[
+				'',
+				`Browser:  ${handle.browserName} (visible)`,
+				`Profile:  ${options.profileDir}`,
+				`Page:     ${options.url}`,
+				'',
+				'Sign in now. When you are done, CLOSE THE BROWSER WINDOW',
+				'(or press Ctrl+C here). The session is saved when it closes.',
+				'',
+			].join('\n')
+		);
+
+		await waitForClose(handle.context);
+	} finally {
+		await close(handle);
+	}
+
+	process.stdout.write(`\nSession saved to ${options.profileDir}\n`);
+	process.stdout.write(`Clip with: npm run clip -- "<url>" --profile ${options.profile}\n`);
+}
+
+main().catch((error) => {
+	process.stderr.write(`[error] ${error && error.message ? error.message : error}\n`);
+	process.exit(1);
+});

@@ -50,8 +50,7 @@ function requireValue(args, index, flag) {
 	return value;
 }
 
-function parseArgs(argv, env = {}) {
-	const cwd = env.cwd || process.cwd();
+function parseArgs(argv, env = {}) {	const cwd = env.cwd || process.cwd();
 	const homedir = env.homedir || os.homedir();
 	const args = [...argv];
 	const first = args[0];
@@ -163,11 +162,19 @@ function parseArgs(argv, env = {}) {
 	options.url = parsed.toString();
 
 	if (!options.profileDir) {
-		const safeProfile = options.profile.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '').trim() || 'default';
-		options.profileDir = path.join(homedir, '.clip-everything', 'profiles', safeProfile);
+		options.profileDir = resolveProfileDir(options.profile, homedir);
 	}
 
 	return options;
+}
+
+/**
+ * ~/.clip-everything/profiles/<name>, with the profile name reduced to a safe
+ * path segment so `--profile "a/b"` cannot escape the profiles directory.
+ */
+function resolveProfileDir(profile, homedir = os.homedir()) {
+	const safeProfile = String(profile || 'default').replace(/[<>:"/\\|?*\u0000-\u001F]/g, '').trim() || 'default';
+	return path.join(homedir, '.clip-everything', 'profiles', safeProfile);
 }
 
 module.exports = {
@@ -175,4 +182,5 @@ module.exports = {
 	USAGE,
 	WAIT_MODES,
 	parseArgs,
+	resolveProfileDir,
 };

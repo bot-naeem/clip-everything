@@ -3,6 +3,7 @@
 | File | Purpose |
 | --- | --- |
 | `clip.js` | CLI entry point (see `scripts/lib/` for the pipeline modules) |
+| `login.js` | Opens a visible browser to sign in, saves cookies to the profile |
 | `lib/args.js` | Flag parsing, profile/timer defaults |
 | `lib/browser.js` | Playwright launch, channel fallback, navigation |
 | `lib/extract.js` | Defuddle injection, generic + fallback extractors, wall detection |

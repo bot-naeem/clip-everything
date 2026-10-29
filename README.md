@@ -137,13 +137,27 @@ Everything else goes through Defuddle, with a plain-DOM fallback. Adding a site 
 
 ## Login-gated pages
 
-Profiles live in `~/.clip-everything/profiles/<name>`. Run once with `--headed`, log in, close the browser; later runs reuse the cookies:
+Profiles live in `~/.clip-everything/profiles/<name>`. Sign in once with the
+`login` command — it opens a visible browser and saves the session when you close
+the window:
 
 ```bash
-npm run clip -- "https://x.com/i/status/123" --headed --profile x
+npm run login -- --profile zhihu            # opens https://www.zhihu.com
+npm run login -- --profile x --url https://x.com
+```
+
+Then reuse that profile:
+
+```bash
+npm run clip -- "https://zhuanlan.zhihu.com/p/123" --profile zhihu
+npm run clip -- "https://x.com/user/status/123" --profile x
 ```
 
 Use `--no-persist` for one-off anonymous clips.
+
+If a site serves a captcha or login wall, the CLI stops with
+`site returned a wall instead of content` and tells you to sign in — it will not
+write a bogus note.
 
 ## Development
 

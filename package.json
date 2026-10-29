@@ -36,6 +36,7 @@
 	},
 	"scripts": {
 		"clip": "node scripts/clip.js",
+		"login": "node scripts/login.js",
 		"clip:acceptance": "node scripts/acceptance.js",
 		"clip:zhihu-acceptance": "bash scripts/zhihu-acceptance.sh",
 		"install-browser": "npx --yes playwright@latest install chromium",

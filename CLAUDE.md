@@ -20,6 +20,7 @@ extension was removed.
 npm install                 # install deps
 npm run install-browser     # only if neither Chrome nor Edge is present
 npm run clip -- <url>       # clip one page -> ./clips/<title>.md
+npm run login -- --profile <name>   # visible browser, saves cookies on close
 npm test                    # vitest (tests/)
 npm run test:watch
 ```
@@ -35,6 +36,7 @@ npm run clip -- "https://zhuanlan.zhihu.com/p/123" --headed
 
 ```
 scripts/clip.js            CLI entry: parse -> launch -> navigate -> extract -> transform -> write
+scripts/login.js           opens a visible persistent profile and waits for you to close it
 scripts/lib/args.js        flag parsing, profile dir resolution (pure, tested)
 scripts/lib/browser.js     playwright-core launch (persistent profile, channel fallback), navigation
 scripts/lib/extract.js     Defuddle injection + generic/fallback extractors (page functions)

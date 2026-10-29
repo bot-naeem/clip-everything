@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import args from '../scripts/lib/args.js';
 
-const { parseArgs } = args;
+const { parseArgs, resolveProfileDir } = args;
 
 const env = { cwd: process.cwd(), homedir: process.cwd() };
 const url = 'https://example.com/article';
@@ -68,5 +68,16 @@ describe('parseArgs', () => {
 	it('reports help and version without parsing a url', () => {
 		expect(parseArgs(['--help'], env)).toEqual({ help: true });
 		expect(parseArgs(['--version'], env)).toEqual({ version: true });
+	});
+});
+
+describe('resolveProfileDir', () => {
+	it('keeps profile names inside the profiles directory', () => {
+		const dir = resolveProfileDir('../../etc', env.homedir);
+		expect(dir).toBe(path.join(env.homedir, '.clip-everything', 'profiles', '....etc'));
+	});
+
+	it('falls back to default for empty names', () => {
+		expect(resolveProfileDir('', env.homedir)).toBe(path.join(env.homedir, '.clip-everything', 'profiles', 'default'));
 	});
 });
