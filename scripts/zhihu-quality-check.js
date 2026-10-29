@@ -42,7 +42,7 @@ function checkCommon(md, errors) {
 }
 
 function checkZhuanlan(md, errors) {
-	const noiseMarkers = [
+		const noiseMarkers = [
 		'还没有人送礼物',
 		'所属专栏',
 		'最热内容 ·',

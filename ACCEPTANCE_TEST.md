@@ -1,21 +1,34 @@
 # Acceptance Test - Final Gate
 
 ## Target URLs
-1. https://zhuanlan.zhihu.com/p/2007944059558323475?share_code=wpShSwJIjJWb&utm_psn=2010112084201980758
+
+1. https://zhuanlan.zhihu.com/p/2007944059558323475
 2. https://x.com/i/status/2025986105485733945
 
 ## Pass Criteria
-The project is considered finally passed only when both URLs can be clipped successfully by the CLI.
 
-For each URL, all conditions below must be true:
-1. CLI command exits with code `0`.
+The project passes only when both URLs clip successfully.
+
+For each URL, all conditions must be true:
+
+1. The CLI exits with code `0`.
 2. A Markdown file is generated.
-3. Generated Markdown is non-empty and includes page title/content.
-4. CLI output reports success with output file path.
+3. The generated Markdown is non-empty and contains the page title and body.
+4. The CLI JSON reports `ok: true` and the output file path.
 
-## Suggested Command Shape
-`obsidian-clipper clip "<URL>" --profile openclaw --wait networkidle`
+## Command
 
-## Final Verification Rule
-Run clipping for URL #1 and URL #2.  
-Final result = `PASS` only if both runs pass all criteria above.
+```bash
+npm run clip -- "<URL>" --output clips --wait networkidle --timeout-ms 60000
+```
+
+Convenience script for both URLs:
+
+```bash
+npm run clip:acceptance
+```
+
+## Final verification rule
+
+Run the clip for URL #1 and URL #2. Final result = `PASS` only if both runs
+satisfy every condition above.

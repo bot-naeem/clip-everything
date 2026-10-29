@@ -1,47 +1,19 @@
-## Scripts
+# scripts
 
-### Localization
+| File | Purpose |
+| --- | --- |
+| `clip.js` | CLI entry point (see `scripts/lib/` for the pipeline modules) |
+| `lib/args.js` | Flag parsing, profile/timer defaults |
+| `lib/browser.js` | Playwright launch, channel fallback, navigation |
+| `lib/extract.js` | Defuddle injection, generic + fallback extractors, wall detection |
+| `lib/sites.js` | Per-site adapters (Zhihu answer/zhuanlan, X status) |
+| `lib/markdown.js` | obsidian-clipper converter bridge + Turndown fallback |
+| `lib/naming.js` | Filename sanitising, token rendering, unique paths |
+| `lib/frontmatter.js` | YAML frontmatter |
+| `lib/errors.js` | `StageError` |
+| `acceptance.js` | Cross-platform acceptance run (`npm run clip:acceptance`) |
+| `acceptance-test.sh` | Same, POSIX shell |
+| `zhihu-acceptance.sh` | Zhihu-specific run + quality checks |
+| `zhihu-quality-check.js` | Asserts a clipped Zhihu note has no UI noise |
 
-First, add an OpenAI API key in `.env` at the root of the repo:
-
-```
-OPENAI_API_KEY=sk-...
-```
-
-Scripts can be run using npm in the root of the repo.
-
-#### Update locale
-
-```
-npm run update-locales
-```
-
-- Checks the English locale file and automatically translates missing strings
-- Reorganizes strings alphabetically
-
-#### Add locale
-
-```bash
-npm run add-locale fr
-```
-
-### Version bump
-
-```bash
-./scripts/bump-version.sh 1.0.1
-```
-
-- Updates `version` in `package.json`, all browser manifests, and `dev/manifest.json`
-- Updates `MARKETING_VERSION` in the Xcode project
-- Increments `CURRENT_PROJECT_VERSION` by 1
-
-### Changelog
-
-```bash
-./scripts/generate-changelog.sh
-```
-
-- Generates `changelogs/<version>.md` from commits since the last git tag
-- Reads the version from `package.json`
-- Commits starting with "fix" are grouped under an **Improved** section
-- Version bump commits are excluded
+Unit tests for the `lib/` modules live in `../tests/`.

@@ -3,3 +3,10 @@ node_modules/
 .env
 context/
 clips/
+.clip-everything/
+*.log
+
+# OS / editor
+Thumbs.db
+.idea/
+.vscode/
