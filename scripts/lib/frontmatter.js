@@ -24,4 +24,27 @@ function buildFrontmatter(payload, now = new Date()) {
 	return lines.join('\n');
 }
 
-module.exports = { buildFrontmatter, yamlString };
+/**
+ * Video notes carry a few extra fields that a web clip does not have:
+ * duration, the spoken language and how the text was obtained.
+ */
+function buildVideoFrontmatter(payload, meta = {}, now = new Date()) {
+	const lines = [
+		'---',
+		`title: ${yamlString(payload.title)}`,
+		`source: ${yamlString(payload.url)}`,
+		`author: ${yamlString(payload.author)}`,
+		`site: ${yamlString(payload.site)}`,
+		`published: ${yamlString(payload.published)}`,
+		`duration: ${yamlString(meta.duration)}`,
+		`language: ${yamlString(meta.language)}`,
+		`transcript: ${yamlString(meta.transcript)}`,
+		`description: ${yamlString(payload.description)}`,
+		`clipped_at: "${now.toISOString()}"`,
+		'---',
+		'',
+	];
+	return lines.join('\n');
+}
+
+module.exports = { buildFrontmatter, buildVideoFrontmatter, yamlString };

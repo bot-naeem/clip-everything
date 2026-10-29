@@ -60,6 +60,16 @@ async function runClip(options, warn) {
 }
 
 async function main() {
+	const argv = process.argv.slice(2);
+
+	// `clip --video <url>` is the video pipeline; it has its own options and does
+	// not touch the browser at all.
+	if (argv.includes('--video')) {
+		const { main: runVideo } = require('./transcribe');
+		await runVideo(argv.filter((arg) => arg !== '--video'));
+		return;
+	}
+
 	const startMs = Date.now();
 	const warnings = [];
 	const warn = (code, message) => {

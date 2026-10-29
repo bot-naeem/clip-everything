@@ -11,6 +11,7 @@ const USAGE = [
 	'',
 	'Usage:',
 	'  npm run clip -- <url> [options]',
+	'  npm run clip -- --video <url> [options]   transcribe a video (see --video --help)',
 	'  npx clip-everything <url> [options]',
 	'',
 	'Options:',
@@ -50,7 +51,8 @@ function requireValue(args, index, flag) {
 	return value;
 }
 
-function parseArgs(argv, env = {}) {	const cwd = env.cwd || process.cwd();
+function parseArgs(argv, env = {}) {
+	const cwd = env.cwd || process.cwd();
 	const homedir = env.homedir || os.homedir();
 	const args = [...argv];
 	const first = args[0];

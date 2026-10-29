@@ -1,7 +1,7 @@
 {
 	"name": "clip-everything",
 	"version": "2.0.0",
-	"description": "Clip web pages to Markdown notes with a real browser (Playwright + Defuddle).",
+	"description": "Clip web pages to Markdown notes with a real browser (Playwright + Defuddle), and transcribe videos to timestamped notes (yt-dlp + whisper.cpp).",
 	"license": "MIT",
 	"author": "wmm",
 	"keywords": [
@@ -11,7 +11,10 @@
 		"obsidian",
 		"playwright",
 		"defuddle",
-		"readability"
+		"readability",
+		"youtube",
+		"transcript",
+		"whisper"
 	],
 	"repository": {
 		"type": "git",
@@ -36,7 +39,9 @@
 	},
 	"scripts": {
 		"clip": "node scripts/clip.js",
+		"video": "node scripts/transcribe.js",
 		"login": "node scripts/login.js",
+		"setup:video": "node scripts/setup-video.js",
 		"clip:acceptance": "node scripts/acceptance.js",
 		"clip:zhihu-acceptance": "bash scripts/zhihu-acceptance.sh",
 		"install-browser": "npx --yes playwright@latest install chromium",

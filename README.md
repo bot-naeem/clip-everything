@@ -22,6 +22,7 @@ The rendered DOM is then handed to [Defuddle](https://github.com/kepano/defuddle
 - Node.js 18+
 - A Chromium-family browser. **Chrome or Edge is auto-detected**, so most machines need nothing extra.
 - Only if you have neither: `npm run install-browser` (downloads Chromium).
+- For `--video` only: `npm run setup:video` (yt-dlp, ffmpeg, whisper.cpp + model, ~600 MB).
 
 ## Install
 
@@ -90,6 +91,7 @@ npm run clip -- <url> [options]
 | `--browser <name>` | `auto` | `auto` \| `chromium` \| `chrome` \| `msedge` |
 | `--headed` | off | Show the browser window |
 | `--no-frontmatter` | off | Omit the YAML block |
+| `--video <url>` | off | Transcribe a video instead of clipping a page (see below) |
 | `--help`, `--version` | | |
 
 Filename tokens: `{title}` `{domain}` `{date}` `{time}` (local time, `YYYY-MM-DD`).
@@ -155,9 +157,92 @@ npm run clip -- "https://x.com/user/status/123" --profile x
 
 Use `--no-persist` for one-off anonymous clips.
 
+The login command also exports `cookies.txt` into the profile directory. That is
+what the video pipeline reads — yt-dlp cannot read Chromium's cookie database
+while the browser is running, but a `cookies.txt` works any time:
+
+```bash
+npm run login -- --profile youtube --url https://www.youtube.com
+npm run clip -- --video "https://www.youtube.com/watch?v=..." --profile youtube
+```
+
 If a site serves a captcha or login wall, the CLI stops with
 `site returned a wall instead of content` and tells you to sign in — it will not
 write a bogus note.
+
+## Video → transcript
+
+`--video` turns a talk, lecture or course video into a timestamped Markdown note.
+It skips the browser entirely: yt-dlp downloads the captions, or the audio when
+there are none, and whisper.cpp transcribes it.
+
+```bash
+npm run setup:video                                   # one-time, ~600 MB
+npm run clip -- --video "https://www.youtube.com/watch?v=..."
+npm run clip -- --video "https://www.bilibili.com/video/BV..." --lang zh --save-srt
+```
+
+The note looks like this:
+
+```markdown
+---
+title: "How great leaders inspire action"
+source: "https://www.youtube.com/watch?v=qp0HIF3SfI4"
+author: "TED"
+site: "YouTube"
+published: "2010-05-04"
+duration: "17:47"
+language: "en"
+transcript: "auto captions (en)"
+---
+# How great leaders inspire action
+
+> TED · 17:47 · auto captions (en)
+> https://www.youtube.com/watch?v=qp0HIF3SfI4
+
+## Chapters
+
+- [00:00] Intro
+
+## Transcript
+
+**[00:00]** how do you explain when things don't go as we assume...
+```
+
+Route selection, in order:
+
+1. manual captions matching `--lang`
+2. automatic captions matching `--lang`
+3. speech-to-text with `--whisper-model` (default `small`)
+
+YouTube's rolling auto-captions (each cue repeats the previous one) are collapsed
+before the text is grouped into paragraphs on pauses longer than 2.5 s, so the
+note reads like prose instead of one line per cue. `--save-srt` writes the
+cleaned cues next to the note.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--lang <codes>` | `zh-Hans,zh-CN,zh,en` | Subtitle language preference |
+| `--whisper-model <name>` | `small` | `tiny` \| `base` \| `small` \| `medium` \| `large-v3` |
+| `--no-whisper` | off | Fail instead of falling back to speech-to-text |
+| `--force-whisper` | off | Ignore captions and transcribe the audio |
+| `--save-srt` | off | Also write `<name>.srt` |
+| `--keep-audio` | off | Keep the downloaded audio next to the note |
+| `--proxy <url>` / `--no-proxy` | auto-detect local | Proxy for yt-dlp |
+| `--cookies-from-browser <name>` | off | Reuse a browser session (`edge`, `chrome`, `firefox`) |
+| `--cookies <file>` | off | Netscape `cookies.txt` |
+| `--profile <name>` | off | Use the `cookies.txt` exported by `npm run login -- --profile <name>` |
+| `--threads <n>` | CPU count - 1 | whisper.cpp threads |
+
+Two practical notes:
+
+- **YouTube bot wall.** Anonymous requests from datacenter or proxy IPs often get
+  `Sign in to confirm you're not a bot`. Sign in once with
+  `npm run login -- --profile youtube --url https://www.youtube.com` and pass
+  `--profile youtube`; ClipEverything also retries with cookies from an installed
+  browser automatically.
+- **Speed.** `small` runs on CPU at roughly 1/5–1/2 of realtime; `medium` is more
+  accurate and about 3× slower. Captions, when present, are instant.
 
 ## Development
 
@@ -169,7 +254,9 @@ npm run test:watch
 | Path | Purpose |
 | --- | --- |
 | `scripts/clip.js` | CLI entry: orchestration + JSON output |
+| `scripts/transcribe.js` | `--video` pipeline: probe → captions or whisper → Markdown |
 | `scripts/lib/` | args, browser, extract, sites, markdown, naming, frontmatter |
+| `scripts/lib/media/` | yt-dlp, ffmpeg and whisper wrappers + subtitle parser |
 | `tests/` | unit tests for the CLI helpers |
 | `src/utils/` | vendored obsidian-clipper converter (3 files): `markdown-converter.ts`, `string-utils.ts`, `debug.ts` |
 

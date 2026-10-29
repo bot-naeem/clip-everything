@@ -22,6 +22,7 @@ English: [README.md](./README.md)
 - Node.js 18+
 - 一个 Chromium 内核浏览器：**Chrome 或 Edge 会自动检测**，绝大多数机器什么都不用装。
 - 只有两者都没有时才需要 `npm run install-browser` 下载 Chromium。
+- 只有用 `--video` 时才需要 `npm run setup:video`（yt-dlp + ffmpeg + whisper.cpp + 模型，约 600 MB）。
 
 ## 安装
 
@@ -90,6 +91,7 @@ npm run clip -- <url> [参数]
 | `--browser <name>` | `auto` | `auto` \| `chromium` \| `chrome` \| `msedge` |
 | `--headed` | 关闭 | 显示浏览器窗口 |
 | `--no-frontmatter` | 关闭 | 不输出 YAML 头 |
+| `--video <url>` | 关闭 | 转写视频而不是剪藏网页（见下文） |
 | `--help`, `--version` | | |
 
 文件名 token：`{title}` `{domain}` `{date}` `{time}`（本地时间，`YYYY-MM-DD`）。
@@ -153,7 +155,78 @@ npm run clip -- "https://x.com/user/status/123" --profile x
 
 一次性匿名剪藏用 `--no-persist`。
 
+`login` 还会把 `cookies.txt` 导出到 profile 目录。视频流程用的就是它 —— yt-dlp 没法在浏览器运行时读取 Chromium 的 Cookie 库，但 `cookies.txt` 随时可用：
+
+```bash
+npm run login -- --profile youtube --url https://www.youtube.com
+npm run clip -- --video "https://www.youtube.com/watch?v=..." --profile youtube
+```
+
 如果站点返回验证码/登录墙，CLI 会以 `site returned a wall instead of content` 中止并提示先登录，不会写出一个内容错误的笔记。
+
+## 视频转写
+
+`--video` 把讲座、课程、访谈转成带时间戳的 Markdown 笔记。它完全不碰浏览器：yt-dlp 负责拿字幕，没有字幕就下载音频交给 whisper.cpp 转写。
+
+```bash
+npm run setup:video                                   # 一次性安装，约 600 MB
+npm run clip -- --video "https://www.youtube.com/watch?v=..."
+npm run clip -- --video "https://www.bilibili.com/video/BV..." --lang zh --save-srt
+```
+
+产出的笔记：
+
+```markdown
+---
+title: "How great leaders inspire action"
+source: "https://www.youtube.com/watch?v=qp0HIF3SfI4"
+author: "TED"
+site: "YouTube"
+published: "2010-05-04"
+duration: "17:47"
+language: "en"
+transcript: "auto captions (en)"
+---
+# How great leaders inspire action
+
+> TED · 17:47 · auto captions (en)
+> https://www.youtube.com/watch?v=qp0HIF3SfI4
+
+## Chapters
+
+- [00:00] Intro
+
+## Transcript
+
+**[00:00]** how do you explain when things don't go as we assume...
+```
+
+取字幕的顺序：
+
+1. 人工字幕（按 `--lang` 顺序匹配）
+2. 自动字幕
+3. 语音转写（`--whisper-model`，默认 `small`）
+
+YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再按超过 2.5 秒的停顿合并成段落，所以读起来是文章而不是一行一句。`--save-srt` 会把清洗后的字幕同时写成 `.srt`。
+
+| 选项 | 默认 | 说明 |
+| --- | --- | --- |
+| `--lang <codes>` | `zh-Hans,zh-CN,zh,en` | 字幕语言优先级 |
+| `--whisper-model <name>` | `small` | `tiny` \| `base` \| `small` \| `medium` \| `large-v3` |
+| `--no-whisper` | 关闭 | 没有字幕时直接失败，不转写 |
+| `--force-whisper` | 关闭 | 忽略字幕，强制转写音频 |
+| `--save-srt` | 关闭 | 额外写出 `<文件名>.srt` |
+| `--keep-audio` | 关闭 | 保留下载的音频 |
+| `--proxy <url>` / `--no-proxy` | 自动探测本地代理 | yt-dlp 的代理 |
+| `--cookies-from-browser <name>` | 关闭 | 复用浏览器登录态（`edge`、`chrome`、`firefox`） |
+| `--cookies <file>` | 关闭 | Netscape 格式 `cookies.txt` |
+| `--profile <name>` | 关闭 | 使用 `npm run login -- --profile <name>` 导出的 `cookies.txt` |
+| `--threads <n>` | CPU 核数 - 1 | whisper.cpp 线程数 |
+
+两个实际会遇到的问题：
+
+- **YouTube 机器人墙。** 数据中心/代理 IP 的匿名请求经常被要求登录（`Sign in to confirm you're not a bot`）。先用 `npm run login -- --profile youtube --url https://www.youtube.com` 登录一次，再用 `--profile youtube`；程序也会自动尝试已安装浏览器的 Cookie。
+- **速度。** `small` 模型在 CPU 上大约是 1/5–1/2 倍速；`medium` 更准但慢约 3 倍。有字幕时是秒级。
 
 ## 开发
 
@@ -165,7 +238,9 @@ npm run test:watch
 | 路径 | 作用 |
 | --- | --- |
 | `scripts/clip.js` | CLI 入口：流程编排 + JSON 输出 |
+| `scripts/transcribe.js` | `--video` 流程：探测 → 字幕或 Whisper → Markdown |
 | `scripts/lib/` | args、browser、extract、sites、markdown、naming、frontmatter |
+| `scripts/lib/media/` | yt-dlp / ffmpeg / whisper 封装 + 字幕解析 |
 | `tests/` | CLI 工具库单元测试 |
 | `src/utils/` | 从 obsidian-clipper 搬来的转换器（3 个文件）：`markdown-converter.ts`、`string-utils.ts`、`debug.ts` |
 
