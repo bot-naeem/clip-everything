@@ -25,10 +25,26 @@ English: [README.md](./README.md)
 
 ## 安装
 
+不装也能用，直接 `npx`：
+
+```bash
+npx clip-everything "https://example.com/article"
+```
+
+或者全局安装：
+
+```bash
+npm install -g clip-everything
+clip-everything "https://example.com/article"
+```
+
+从源码跑：
+
 ```bash
 git clone git@github.com:bot-naeem/clip-everything.git
 cd clip-everything
 npm install
+npm run clip -- "https://example.com/article"
 ```
 
 ## 快速开始
@@ -132,7 +148,7 @@ npm run clip -- "https://x.com/i/status/123" --headed --profile x
 ## 开发
 
 ```bash
-npm test           # vitest：tests/（CLI 工具库）+ src/utils（filters、parser）
+npm test           # vitest：tests/（CLI 工具库）
 npm run test:watch
 ```
 
@@ -141,7 +157,7 @@ npm run test:watch
 | `scripts/clip.js` | CLI 入口：流程编排 + JSON 输出 |
 | `scripts/lib/` | args、browser、extract、sites、markdown、naming、frontmatter |
 | `tests/` | CLI 工具库单元测试 |
-| `src/` | 从 obsidian-clipper 搬来的扩展代码；运行时只用到 `markdown-converter.ts` 和 filters |
+| `src/utils/` | 从 obsidian-clipper 搬来的转换器（3 个文件）：`markdown-converter.ts`、`string-utils.ts`、`debug.ts` |
 
 ## 从 1.x（OpenClaw）迁移
 

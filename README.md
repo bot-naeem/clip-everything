@@ -25,10 +25,26 @@ The rendered DOM is then handed to [Defuddle](https://github.com/kepano/defuddle
 
 ## Install
 
+Nothing to install — run it with `npx`:
+
+```bash
+npx clip-everything "https://example.com/article"
+```
+
+Or install it globally:
+
+```bash
+npm install -g clip-everything
+clip-everything "https://example.com/article"
+```
+
+From source:
+
 ```bash
 git clone git@github.com:bot-naeem/clip-everything.git
 cd clip-everything
 npm install
+npm run clip -- "https://example.com/article"
 ```
 
 ## Quick start
@@ -132,7 +148,7 @@ Use `--no-persist` for one-off anonymous clips.
 ## Development
 
 ```bash
-npm test           # vitest: tests/ (CLI libs) + src/utils (filters, parser)
+npm test           # vitest: tests/ (CLI libs)
 npm run test:watch
 ```
 
@@ -141,7 +157,7 @@ npm run test:watch
 | `scripts/clip.js` | CLI entry: orchestration + JSON output |
 | `scripts/lib/` | args, browser, extract, sites, markdown, naming, frontmatter |
 | `tests/` | unit tests for the CLI helpers |
-| `src/` | vendored obsidian-clipper extension code; only `markdown-converter.ts` and filters are used |
+| `src/utils/` | vendored obsidian-clipper converter (3 files): `markdown-converter.ts`, `string-utils.ts`, `debug.ts` |
 
 ## Migrating from 1.x (OpenClaw)
 

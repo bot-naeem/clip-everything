@@ -10,8 +10,9 @@ the page), and converts it to Markdown with the obsidian-clipper converter
 (with Turndown as a fallback).
 
 Derived from [obsidian-clipper](https://github.com/obsidianmd/obsidian-clipper).
-The `src/` tree is the vendored extension code; only `src/utils/markdown-converter.ts`
-(and the filter/parser modules it imports) is used at runtime.
+The `src/utils/` directory holds the three vendored files the CLI actually needs
+(`markdown-converter.ts`, `string-utils.ts`, `debug.ts`); everything else from the
+extension was removed.
 
 ## Commands
 
@@ -19,7 +20,7 @@ The `src/` tree is the vendored extension code; only `src/utils/markdown-convert
 npm install                 # install deps
 npm run install-browser     # only if neither Chrome nor Edge is present
 npm run clip -- <url>       # clip one page -> ./clips/<title>.md
-npm test                    # vitest (tests/ + src/**/*.test.ts)
+npm test                    # vitest (tests/)
 npm run test:watch
 ```
 
@@ -43,7 +44,18 @@ scripts/lib/naming.js      filename sanitising, token rendering, unique paths, g
 scripts/lib/frontmatter.js YAML block
 scripts/lib/errors.js      StageError(stage, message, cause)
 tests/                     vitest specs for the libs
+src/utils/                 vendored obsidian-clipper converter (markdown-converter, string-utils, debug)
 ```
+
+## Publishing
+
+`package.json` declares `bin: { "clip-everything": "scripts/clip.js" }` and a
+`files` allowlist (`scripts/`, `src/`, READMEs, LICENSE), so `npx clip-everything`
+works and `src/utils/*.ts` ships with the package — it is loaded at runtime by
+ts-node. `prepublishOnly` runs the test suite.
+
+`typescript` must stay in `dependencies` (not devDependencies): ts-node requires
+it at runtime, and npm does not install a package's devDependencies for consumers.
 
 ## Conventions
 

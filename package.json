@@ -3,6 +3,34 @@
 	"version": "2.0.0",
 	"description": "Clip web pages to Markdown notes with a real browser (Playwright + Defuddle).",
 	"license": "MIT",
+	"author": "wmm",
+	"keywords": [
+		"markdown",
+		"web-clipper",
+		"clip",
+		"obsidian",
+		"playwright",
+		"defuddle",
+		"readability"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/bot-naeem/clip-everything.git"
+	},
+	"bugs": {
+		"url": "https://github.com/bot-naeem/clip-everything/issues"
+	},
+	"homepage": "https://github.com/bot-naeem/clip-everything#readme",
+	"bin": {
+		"clip-everything": "scripts/clip.js"
+	},
+	"files": [
+		"scripts/",
+		"src/",
+		"README.md",
+		"README.zh-CN.md",
+		"LICENSE"
+	],
 	"engines": {
 		"node": ">=18"
 	},
@@ -11,25 +39,23 @@
 		"clip:acceptance": "node scripts/acceptance.js",
 		"clip:zhihu-acceptance": "bash scripts/zhihu-acceptance.sh",
 		"install-browser": "npx --yes playwright@latest install chromium",
+		"prepublishOnly": "npm test",
 		"test": "vitest run",
 		"test:watch": "vitest"
 	},
 	"devDependencies": {
 		"@types/node": "^22.5.4",
 		"@types/turndown": "^5.0.5",
-		"typescript": "^5.5.4",
 		"vitest": "^2.1.9"
 	},
 	"dependencies": {
-		"dayjs": "^1.11.13",
 		"defuddle": "^0.19.6",
-		"dompurify": "^3.0.9",
-		"highlight.js": "^11.11.1",
 		"jsdom": "^26.0.0",
 		"mathml-to-latex": "^1.4.1",
 		"playwright-core": "^1.64.1",
 		"ts-node": "^10.9.2",
 		"turndown": "^7.2.0",
-		"turndown-plugin-gfm": "^1.0.2"
+		"turndown-plugin-gfm": "^1.0.2",
+		"typescript": "^5.5.4"
 	}
 }
