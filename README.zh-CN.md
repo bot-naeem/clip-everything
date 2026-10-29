@@ -182,6 +182,30 @@ npm run test:watch
 
 同时修掉：`defuddle` 和 `ts-node` 现在是正式依赖（以前干净 `npm ci` 会直接跑不起来）；隔离转换器不再通过 argv 传 HTML（Windows 32k 上限）。
 
+## 常见问题
+
+**Windows PowerShell 报 `npm : 无法加载文件 …npm.ps1，因为在此系统上禁止运行脚本`**
+
+PowerShell 默认执行策略挡住了 npm 的 `.ps1` 包装。改用 `.cmd`：
+
+```powershell
+npm.cmd run clip -- "https://example.com"
+```
+
+或者一次性放开本机脚本（只影响当前用户，不需要管理员）：
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+**`site returned a wall instead of content`**
+
+页面在登录墙/验证码后面。先用 `npm run login -- --profile <名字>` 登录一次，再用同一个 `--profile` 剪。
+
+**剪藏先等约 30 秒，然后警告 `networkidle never settled`**
+
+有些页面保持长连接。加 `--wait domcontentloaded`。
+
 ## License
 
 MIT

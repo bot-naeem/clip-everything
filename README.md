@@ -186,6 +186,32 @@ npm run test:watch
 
 Also fixed: `defuddle` and `ts-node` are real dependencies now (a clean `npm ci` used to fail), and the isolated converter no longer passes HTML through argv (Windows' 32k limit).
 
+## Troubleshooting
+
+**Windows PowerShell: `npm : 无法加载文件 …npm.ps1，因为在此系统上禁止运行脚本`**
+
+The default PowerShell execution policy blocks npm's `.ps1` shim. Use the `.cmd`
+shim instead:
+
+```powershell
+npm.cmd run clip -- "https://example.com"
+```
+
+Or allow locally created scripts once (per user, no admin needed):
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+**`site returned a wall instead of content`**
+
+The page is behind a login or captcha. Sign in once with `npm run login -- --profile <name>`
+and clip with the same `--profile`.
+
+**The clip waits ~30s then warns `networkidle never settled`**
+
+Some pages keep a long-lived connection open. Pass `--wait domcontentloaded`.
+
 ## License
 
 MIT
