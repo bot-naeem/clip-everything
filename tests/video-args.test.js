@@ -48,6 +48,11 @@ describe('parseVideoArgs', () => {
 		expect(options.timeoutMs).toBe(600000);
 	});
 
+	it('parses --jobs and rejects zero', () => {
+		expect(parseVideoArgs([URL, '--playlist', '--jobs', '3'], env).jobs).toBe(3);
+		expect(() => parseVideoArgs([URL, '--jobs', '0'], env)).toThrow();
+	});
+
 	it('rejects an unknown whisper backend', () => {
 		expect(() => parseVideoArgs([URL, '--whisper-backend', 'magic'], env)).toThrow();
 	});

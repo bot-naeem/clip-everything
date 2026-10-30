@@ -80,6 +80,16 @@ use Playwright; it shells out to yt-dlp (metadata, captions, audio) and to
 ffmpeg + whisper.cpp (speech-to-text). Stages are `start`, `download`,
 `transcribe`, `write`.
 
+Defaults this project settled on after measuring:
+
+- GPU (faster-whisper) whenever `CLIP_FASTER_WHISPER_MODEL` / `config.json` is
+  set; whisper.cpp stays the dependency-free fallback.
+- `large-v3-turbo` over `large-v3`: same accuracy on Chinese terminology in our
+  samples, 3x faster. `small` is only right when there is no GPU at all.
+- Float32 on Pascal cards; float16 is emulated there and `int8` needs DP4A,
+  which GTX 10x0 does not have.
+- Playlists transcribe 2 at a time on GPU.
+
 - Binaries live in `~/.clip-everything/bin` and can be overridden with `CLIP_YTDLP`,
   `CLIP_FFMPEG`, `CLIP_FFPROBE`, `CLIP_WHISPER` and `CLIP_WHISPER_MODEL`.
 - Two speech-to-text backends, chosen by `pickBackend()`: whisper.cpp (default,
@@ -89,6 +99,10 @@ ffmpeg + whisper.cpp (speech-to-text). Stages are `start`, `download`,
 - Speech-to-text has its own timeout budget (`transcriptionTimeout()`): at least
   an hour, or 8x the audio duration. The network steps keep `--timeout-ms`
   (10 min default) — a 40 minute lecture needs ~14 min on a 4-core CPU.
+- `--jobs` is a `mapPool` over playlist entries: results are collected by index
+  so the note order and `00-Index.md` stay stable whichever video finishes first.
+  Default is 2 on the GPU backend (two float32 models fit in 11 GB) and 1 on CPU
+  (whisper.cpp already saturates every core).
 - Caption formats (json3, vtt, srt) all funnel through `parseSubtitles()` and then
   `normalizeCues()`. Auto captions repeat the previous line, so dedupe is not
   optional — keep it covered by `tests/subtitles.test.js`.

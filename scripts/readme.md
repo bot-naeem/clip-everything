@@ -17,7 +17,10 @@
 | `lib/media/tools.js` | Locate yt-dlp/ffmpeg/whisper and models |
 | `lib/media/js-runtime.js` | Pass a JS runtime to yt-dlp for YouTube's n challenge |
 | `lib/media/ytdlp.js` | Probe, caption download, audio download, error classification |
-| `lib/media/whisper.js` | ffmpeg → 16 kHz wav → whisper-cli |
+| `lib/media/whisper.js` | ffmpeg → 16 kHz wav → whisper-cli (CPU) |
+| `lib/media/faster-whisper.js` | GPU backend: spawns the Python bridge, reads progress |
+| `lib/media/faster_whisper_bridge.py` | CTranslate2 weights → SRT; CUDA DLL paths, Pascal fallback |
+| `lib/config.js` | `~/.clip-everything/config.json` defaults (CLI > env > file) |
 | `lib/media/subtitles.js` | VTT/JSON3/SRT parsing, caption dedupe, paragraphs |
 | `lib/errors.js` | `StageError` |
 | `acceptance.js` | Cross-platform acceptance run (`npm run clip:acceptance`) |

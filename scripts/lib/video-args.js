@@ -44,6 +44,7 @@ const USAGE = [
 	'  --login                        Open a browser to sign in for this site, then continue',
 	'  --playlist                     Transcribe every video in a playlist URL',
 	'  --limit <n>                    With --playlist, stop after the first n videos',
+	'  --jobs <n>                     With --playlist, transcribe n videos at once (default: 2 on GPU, 1 on CPU)',
 	'  --threads <n>                  whisper.cpp threads (default: CPU count)',
 	'  --whisper-timeout-ms <n>       Speech-to-text timeout (default: max(1h, 8x audio))',
 	'  --timeout-ms <n>               Network step timeout (default: 600000)',
@@ -135,6 +136,7 @@ function parseVideoArgs(argv, env = {}) {
 		login: false,
 		playlist: false,
 		limit: 0,
+		jobs: 0,
 		threads: 0,
 		timeoutMs: 600000,
 		whisperTimeoutMs: 0,
@@ -219,6 +221,10 @@ function parseVideoArgs(argv, env = {}) {
 			case '--limit':
 				options.limit = Number(requireValue(args, ++i, arg)) || 0;
 				if (options.limit < 1) fail('--limit must be a positive number');
+				break;
+			case '--jobs':
+				options.jobs = Number(requireValue(args, ++i, arg)) || 0;
+				if (options.jobs < 1) fail('--jobs must be a positive number');
 				break;
 			case '--threads':
 				options.threads = Number(requireValue(args, ++i, arg)) || 0;

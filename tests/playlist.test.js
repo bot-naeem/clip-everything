@@ -33,6 +33,51 @@ describe('entryUrl', () => {
 	});
 });
 
+describe('mapPool', () => {
+	const { mapPool } = transcribe;
+
+	it('keeps results in input order even when tasks finish out of order', async () => {
+		const delays = [60, 10, 30, 5];
+		const out = await mapPool(4, 2, async (index) => {
+			await new Promise((resolve) => setTimeout(resolve, delays[index]));
+			return index * 10;
+		});
+
+		expect(out).toEqual([0, 10, 20, 30]);
+	});
+
+	it('never runs more tasks than requested', async () => {
+		let inFlight = 0;
+		let peak = 0;
+		await mapPool(6, 3, async () => {
+			inFlight++;
+			peak = Math.max(peak, inFlight);
+			await new Promise((resolve) => setTimeout(resolve, 10));
+			inFlight--;
+		});
+
+		expect(peak).toBe(3);
+	});
+
+	it('serialises when jobs is 1', async () => {
+		const order = [];
+		await mapPool(3, 1, async (index) => {
+			order.push(index);
+		});
+
+		expect(order).toEqual([0, 1, 2]);
+	});
+
+	it('propagates a task rejection', async () => {
+		await expect(
+			mapPool(2, 2, async (index) => {
+				if (index === 1) throw new Error('boom');
+				return index;
+			})
+		).rejects.toThrow('boom');
+	});
+});
+
 describe('renderPlaylistIndex', () => {
 	const list = { title: 'Reasoning Course', webpage_url: 'https://example.com/playlist' };
 

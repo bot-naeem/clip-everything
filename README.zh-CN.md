@@ -246,12 +246,17 @@ curl -L -o model.bin "https://www.modelscope.cn/api/v1/models/pengzhendong/faste
 
 实测（i7-7700 + GTX 1080 Ti，40:43 课程音频）：whisper.cpp `small` 用 810 秒，faster-whisper `large-v3-turbo` 用 150 秒，约 16 倍实时。
 
+推荐默认值：GPU 上跑 `large-v3-turbo`。我们实测它在中文术语上比 `large-v3` 更准（CER 3.94% vs 5.39%），还快 3 倍。只有音频嘈杂、多人抢话时才值得切到 `large-v3`。
+
 **整门课程。** 加 `--playlist` 会把课程播放列表逐讲转写，每讲一份笔记，并在同目录生成 `00-Index.md`。单讲失败只会记进索引，不会中断整批：
 
 ```bash
 npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --profile youtube
 npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --limit 3
+npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --jobs 3
 ```
+
+`--jobs` 控制同时转写几讲（GPU 后端默认 2，whisper.cpp 默认 1）。无论谁先跑完，输出和索引都按播放列表顺序排列。
 
 YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再按超过 2.5 秒的停顿合并成段落，所以读起来是文章而不是一行一句。`--save-srt` 会把清洗后的字幕同时写成 `.srt`。
 
@@ -272,6 +277,7 @@ YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再
 | `--login` | 关闭 | 打开浏览器登录当前站点，登完继续转写 |
 | `--playlist` | 关闭 | 把播放列表里的每个视频都转写 |
 | `--limit <n>` | 全部 | 配合 `--playlist`，只转前 `n` 个 |
+| `--jobs <n>` | GPU 2 / CPU 1 | 配合 `--playlist`，同时转写几讲 |
 | `--threads <n>` | CPU 核数 - 1 | whisper.cpp 线程数 |
 | `--timeout-ms <n>` | `600000` | 网络步骤超时（下载、取元信息） |
 

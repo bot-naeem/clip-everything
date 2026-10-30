@@ -264,6 +264,10 @@ curl -L -o model.bin "https://www.modelscope.cn/api/v1/models/pengzhendong/faste
 Measured on an i7-7700 + GTX 1080 Ti, 40:43 of lecture audio: whisper.cpp `small`
 took 810 s, faster-whisper `large-v3-turbo` took 150 s (about 16x realtime).
 
+Recommended defaults: `large-v3-turbo` on the GPU. It beat `large-v3` on Chinese
+terminology in our tests (CER 3.94% vs 5.39%) and is three times faster. Reach for
+`large-v3` only when the audio is noisy or has overlapping speakers.
+
 **Whole playlists.** `--playlist` expands a course playlist, writes one note per
 video, and drops a `00-Index.md` next to them. A failed video is recorded in the
 index instead of aborting the run:
@@ -271,7 +275,12 @@ index instead of aborting the run:
 ```bash
 npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --profile youtube
 npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --limit 3
+npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist --jobs 3
 ```
+
+Videos are transcribed `--jobs` at a time (default: 2 on the GPU backend, 1 on
+whisper.cpp). Results and the index keep the playlist order no matter which
+video finishes first.
 
 YouTube's rolling auto-captions (each cue repeats the previous one) are collapsed
 before the text is grouped into paragraphs on pauses longer than 2.5 s, so the
@@ -295,6 +304,7 @@ cleaned cues next to the note.
 | `--login` | off | Open a browser to sign in for this site, then continue |
 | `--playlist` | off | Transcribe every video in a playlist URL |
 | `--limit <n>` | all | With `--playlist`, stop after `n` videos |
+| `--jobs <n>` | 2 on GPU, 1 on CPU | With `--playlist`, transcribe `n` videos at once |
 | `--threads <n>` | CPU count - 1 | whisper.cpp threads |
 | `--timeout-ms <n>` | `600000` | Network step timeout (downloads, metadata) |
 

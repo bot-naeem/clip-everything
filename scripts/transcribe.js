@@ -410,8 +410,9 @@ function escapeCell(value) {
 
 /** Pure so the index layout can be unit-tested without touching the filesystem. */
 function renderPlaylistIndex(list, items, failures = []) {
-	const title = String(list.title || 'Playlist').trim();
 	const source = list.webpage_url || list.original_url || '';
+	// Channel/space listings come back without a title; the url says more than "Playlist".
+	const title = String(list.title || '').trim() || source || 'Playlist';
 	const lines = [
 		'---',
 		`title: ${JSON.stringify(title)}`,
@@ -447,12 +448,35 @@ function renderPlaylistIndex(list, items, failures = []) {
 }
 
 /**
+ * Run `total` independent tasks with `jobs` in flight. Results keep the input
+ * order regardless of completion order, so playlist indexes stay stable.
+ */
+async function mapPool(total, jobs, task) {
+	const results = new Array(total);
+	let cursor = 0;
+
+	const worker = async () => {
+		for (;;) {
+			const index = cursor++;
+			if (index >= total) return;
+			results[index] = await task(index);
+		}
+	};
+
+	await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, total)) }, worker));
+	return results;
+}
+
+/**
  * A playlist is just N independent single-video runs plus an index. Per-video
- * failures are collected instead of aborting the whole course.
+ * failures are collected instead of aborting the whole course. With a GPU
+ * backend the default is two videos at a time: a transcribed lecture is mostly
+ * waiting on the model, and 11 GB holds two float32 models comfortably.
  */
 async function runPlaylist(options, warn, log) {
 	await ensureLogin(options, log);
 
+	const batchStart = Date.now();
 	const list = await ytdlp.probePlaylist(options.url, options);
 	const entries = (list.entries || []).filter(Boolean);
 	if (!entries.length) {
@@ -460,38 +484,50 @@ async function runPlaylist(options, warn, log) {
 	}
 
 	const selected = options.limit > 0 ? entries.slice(0, options.limit) : entries;
-	log(`playlist: ${list.title || '(untitled)'} — ${selected.length}/${entries.length} videos`);
+	const autoJobs = fasterWhisper.pickBackend(options) === 'faster' ? 2 : 1;
+	const jobs = Math.max(1, Math.min(options.jobs || autoJobs, selected.length));
+	log(`playlist: ${list.title || '(untitled)'} — ${selected.length}/${entries.length} videos, ${jobs} at a time`);
 
-	const items = [];
-	const failures = [];
-
-	for (let index = 0; index < selected.length; index++) {
+	const results = await mapPool(selected.length, jobs, async (index) => {
 		const entry = selected[index];
 		const url = ytdlp.entryUrl(entry);
 		const label = entry.title || url || `#${index + 1}`;
+		const tag = `[${index + 1}/${selected.length}]`;
+		const itemLog = (message) => log(`${tag} ${message}`);
+		const itemWarn = (code, message) => warn(code, `${tag} ${message}`);
 
 		if (!url) {
-			failures.push({ title: label, error: 'could not build a video url from this entry' });
-			warn('item_failed', `${label}: no url`);
-			continue;
+			itemWarn('item_failed', 'could not build a video url from this entry');
+			return { ok: false, failure: { title: label, error: 'could not build a video url from this entry' } };
 		}
 
-		log(`[${index + 1}/${selected.length}] ${label}`);
+		itemLog(label);
 		try {
-			// eslint-disable-next-line no-await-in-loop
-			const result = await runVideo({ ...options, url, playlist: false, login: false }, warn, log);
-			items.push({
-				title: result.info.title || label,
-				url,
-				outputPath: result.outputPath,
-				duration: result.meta.duration,
-				paragraphs: result.transcript.paragraphs,
-			});
+			const result = await runVideo({ ...options, url, playlist: false, login: false }, itemWarn, itemLog);
+			itemLog(`done, ${Math.round((Date.now() - batchStart) / 1000)}s elapsed`);
+			return {
+				ok: true,
+				item: {
+					title: result.info.title || label,
+					url,
+					outputPath: result.outputPath,
+					duration: result.meta.duration,
+					paragraphs: result.transcript.paragraphs,
+				},
+			};
 		} catch (error) {
 			const message = describeError(error);
-			failures.push({ title: label, url, error: message });
-			warn('item_failed', `${label}: ${message}`);
+			itemWarn('item_failed', `${label}: ${message}`);
+			return { ok: false, failure: { title: label, url, error: message } };
 		}
+	});
+
+	const items = [];
+	const failures = [];
+	for (const result of results) {
+		if (!result) continue;
+		if (result.ok) items.push(result.item);
+		else failures.push(result.failure);
 	}
 
 	fs.mkdirSync(options.outputDir, { recursive: true });
@@ -607,6 +643,7 @@ module.exports = {
 	buildMarkdown,
 	collectTranscript,
 	main,
+	mapPool,
 	renderPlaylistIndex,
 	runPlaylist,
 	siteLabel,
