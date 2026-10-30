@@ -32,6 +32,18 @@ function whisperLanguage(language) {
 	return String(language).split(/[-_]/)[0].toLowerCase();
 }
 
+/**
+ * A 40 minute lecture needs ~17 minutes on a 4-core CPU, which is already past
+ * the 10 minute network timeout. Speech-to-text therefore gets its own budget:
+ * at least an hour, or 8x the audio duration (a very slow machine at 1/8
+ * realtime still fits), whichever is larger.
+ */
+function transcriptionTimeout(options = {}) {
+	if (options.whisperTimeoutMs) return options.whisperTimeoutMs;
+	const byDuration = (Number(options.duration) || 0) * 8 * 1000;
+	return Math.max(options.timeoutMs || 0, 3600000, byDuration);
+}
+
 async function transcribe(audioPath, dir, options = {}) {
 	const whisper = requireTool('whisper', options);
 	const modelName = options.whisperModel || 'small';
@@ -58,7 +70,8 @@ async function transcribe(audioPath, dir, options = {}) {
 	if (options.threads) args.push('-t', String(options.threads));
 
 	const result = await run(whisper, args, {
-		timeoutMs: options.timeoutMs || 3600000,
+		timeoutMs: transcriptionTimeout(options),
+		stage: 'transcribe',
 		onStderr: (text) => {
 			const detected = /auto-detected language:\s*([a-zA-Z-]+)/.exec(text);
 			if (detected) detectedLanguage = detected[1].toLowerCase();
@@ -79,4 +92,4 @@ async function transcribe(audioPath, dir, options = {}) {
 	return { srtPath, wavPath, modelPath: model, modelName, detectedLanguage };
 }
 
-module.exports = { toWav, transcribe, whisperLanguage };
+module.exports = { toWav, transcribe, transcriptionTimeout, whisperLanguage };

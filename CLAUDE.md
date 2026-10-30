@@ -55,6 +55,8 @@ scripts/lib/media/tools.js    locate yt-dlp/ffmpeg/whisper + models (env overrid
 scripts/lib/media/js-runtime.js  hand yt-dlp a JS runtime (node) for YouTube's n challenge
 scripts/lib/media/ytdlp.js    probe, caption download, audio download, error classification
 scripts/lib/media/whisper.js  ffmpeg -> 16 kHz wav -> whisper-cli
+scripts/lib/media/faster-whisper.js  optional GPU backend: spawns the Python bridge
+scripts/lib/media/faster_whisper_bridge.py  CTranslate2/whisper weights -> SRT (devices, dll paths)
 scripts/lib/media/subtitles.js VTT/JSON3/SRT parsing, rolling-caption dedupe, paragraphs
 scripts/lib/errors.js      StageError(stage, message, cause)
 tests/                     vitest specs for the libs
@@ -80,6 +82,13 @@ ffmpeg + whisper.cpp (speech-to-text). Stages are `start`, `download`,
 
 - Binaries live in `~/.clip-everything/bin` and can be overridden with `CLIP_YTDLP`,
   `CLIP_FFMPEG`, `CLIP_FFPROBE`, `CLIP_WHISPER` and `CLIP_WHISPER_MODEL`.
+- Two speech-to-text backends, chosen by `pickBackend()`: whisper.cpp (default,
+  no dependencies) and faster-whisper (optional, CUDA). The GPU backend is a
+  Python bridge; `CLIP_FASTER_WHISPER_MODEL` is both its configuration and the
+  switch, so `auto` never silently depends on Python being installed.
+- Speech-to-text has its own timeout budget (`transcriptionTimeout()`): at least
+  an hour, or 8x the audio duration. The network steps keep `--timeout-ms`
+  (10 min default) — a 40 minute lecture needs ~14 min on a 4-core CPU.
 - Caption formats (json3, vtt, srt) all funnel through `parseSubtitles()` and then
   `normalizeCues()`. Auto captions repeat the previous line, so dedupe is not
   optional — keep it covered by `tests/subtitles.test.js`.

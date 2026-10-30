@@ -42,6 +42,37 @@ describe('parseVideoArgs', () => {
 		expect(options.languageExplicit).toBe(true);
 	});
 
+	it('parses a separate speech-to-text timeout', () => {
+		const options = parseVideoArgs([URL, '--whisper-timeout-ms', '5400000'], env);
+		expect(options.whisperTimeoutMs).toBe(5400000);
+		expect(options.timeoutMs).toBe(600000);
+	});
+
+	it('rejects an unknown whisper backend', () => {
+		expect(() => parseVideoArgs([URL, '--whisper-backend', 'magic'], env)).toThrow();
+	});
+
+	it('rejects a zero speech-to-text timeout', () => {
+		expect(() => parseVideoArgs([URL, '--whisper-timeout-ms', '0'], env)).toThrow();
+	});
+
+	it('lets --whisper-model beat the model from config.json', () => {
+		const home = fs.mkdtempSync(path.join(os.tmpdir(), 'clip-args-'));
+		fs.mkdirSync(path.join(home, '.clip-everything'), { recursive: true });
+		fs.writeFileSync(
+			path.join(home, '.clip-everything', 'config.json'),
+			JSON.stringify({ whisper: { backend: 'faster', model: 'D:/models/turbo' } })
+		);
+
+		const withConfig = parseVideoArgs([URL], { ...env, homedir: home });
+		expect(withConfig.whisperBackend).toBe('faster');
+		expect(withConfig.whisperModelFile).toBe('D:/models/turbo');
+
+		const explicit = parseVideoArgs([URL, '--whisper-model', 'D:/models/large-v3'], { ...env, homedir: home });
+		expect(explicit.whisperModelFile).toBeNull();
+		expect(explicit.whisperModel).toBe('D:/models/large-v3');
+	});
+
 	it('handles whisper and proxy switches', () => {
 		const options = parseVideoArgs([URL, '--no-whisper', '--no-proxy', '--save-srt', '--keep-audio'], env);
 		expect(options.whisper).toBe(false);

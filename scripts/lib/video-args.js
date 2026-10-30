@@ -31,6 +31,7 @@ const USAGE = [
 	'  --lang <codes>                 Subtitle language preference, comma separated',
 	`                                 (default: ${DEFAULT_LANGS.join(',')})`,
 	'  --whisper-model <name>         Model when speech-to-text is needed (default: small)',
+	'  --whisper-backend <name>       auto | cpp | faster (default: auto)',
 	'  --no-whisper                   Never fall back to speech-to-text',
 	'  --force-whisper                Ignore existing subtitles, transcribe the audio',
 	'  --keep-audio                   Keep the downloaded audio file',
@@ -44,7 +45,8 @@ const USAGE = [
 	'  --playlist                     Transcribe every video in a playlist URL',
 	'  --limit <n>                    With --playlist, stop after the first n videos',
 	'  --threads <n>                  whisper.cpp threads (default: CPU count)',
-	'  --timeout-ms <n>               Per-step timeout (default: 600000)',
+	'  --whisper-timeout-ms <n>       Speech-to-text timeout (default: max(1h, 8x audio))',
+	'  --timeout-ms <n>               Network step timeout (default: 600000)',
 	'  --frontmatter                  Include YAML frontmatter (default: on)',
 	'  --no-frontmatter               Disable YAML frontmatter',
 	'  --help, -h                     Show this help',
@@ -97,10 +99,13 @@ function defaultProfileFor(url) {
 	}
 }
 
+const { whisperConfig } = require('./config');
+
 function parseVideoArgs(argv, env = {}) {
 	const cwd = env.cwd || process.cwd();
 	const homedir = env.homedir || os.homedir();
 	const args = [...argv];
+	const settings = whisperConfig(env, { homedir });
 
 	// `clip --video <url>` forwards the url positionally; a leading --video is
 	// harmless when the script is called directly.
@@ -114,6 +119,11 @@ function parseVideoArgs(argv, env = {}) {
 		languages: DEFAULT_LANGS,
 		languageExplicit: false,
 		whisperModel: 'small',
+		whisperBackend: settings.backend,
+		python: settings.python,
+		whisperModelFile: settings.model,
+		whisperDevice: settings.device,
+		whisperCompute: settings.compute,
 		whisper: true,
 		forceWhisper: false,
 		keepAudio: false,
@@ -127,6 +137,7 @@ function parseVideoArgs(argv, env = {}) {
 		limit: 0,
 		threads: 0,
 		timeoutMs: 600000,
+		whisperTimeoutMs: 0,
 		frontmatter: true,
 		help: false,
 		version: false,
@@ -160,7 +171,17 @@ function parseVideoArgs(argv, env = {}) {
 				break;
 			case '--whisper-model':
 				options.whisperModel = requireValue(args, ++i, arg);
+				// An explicit flag beats the model configured in config.json.
+				options.whisperModelFile = null;
 				break;
+			case '--whisper-backend': {
+				const backend = requireValue(args, ++i, arg).toLowerCase();
+				if (!['auto', 'cpp', 'faster'].includes(backend)) {
+					fail('--whisper-backend must be auto, cpp or faster');
+				}
+				options.whisperBackend = backend;
+				break;
+			}
 			case '--no-whisper':
 				options.whisper = false;
 				break;
@@ -205,6 +226,10 @@ function parseVideoArgs(argv, env = {}) {
 			case '--timeout-ms':
 				options.timeoutMs = Number(requireValue(args, ++i, arg)) || 0;
 				if (!options.timeoutMs) fail('--timeout-ms must be a positive number');
+				break;
+			case '--whisper-timeout-ms':
+				options.whisperTimeoutMs = Number(requireValue(args, ++i, arg)) || 0;
+				if (!options.whisperTimeoutMs) fail('--whisper-timeout-ms must be a positive number');
 				break;
 			case '--frontmatter':
 				options.frontmatter = true;

@@ -208,6 +208,44 @@ transcript: "auto captions (en)"
 2. 自动字幕
 3. 语音转写（`--whisper-model`，默认 `small`）
 
+**GPU 与大模型（可选）。** whisper.cpp 的官方 Windows 包只有 CPU 版。有 N 卡时用 `--whisper-backend faster` 走 [faster-whisper](https://github.com/SYSTRAN/faster-whisper)，可以直接上 `large-v3`，速度还快一个数量级：
+
+```bash
+python -m pip install faster-whisper nvidia-cublas-cu12 nvidia-cudnn-cu12
+set CLIP_PYTHON=C:\path\to\python.exe             # python 不在 PATH 时才需要
+set CLIP_FASTER_WHISPER_MODEL=D:\models\large-v3  # 模型目录，或 HF 仓库名
+npm run clip -- --video "<url>"
+```
+
+`--whisper-backend auto`（默认）只要检测到 `CLIP_FASTER_WHISPER_MODEL` 就切到 GPU，否则继续用 whisper.cpp。`CLIP_FASTER_WHISPER_DEVICE`（`cuda`/`cpu`）和 `CLIP_FASTER_WHISPER_COMPUTE`（`float16`/`float32`/`int8_float16`）可微调；Pascal 架构（GTX 10 系）不支持高效 float16，桥接脚本会自动退回 `float32`。
+
+CUDA 运行库由 `nvidia-*-cu12` wheel 提供时会自动加载。
+
+不想每次都设环境变量，就写进 `~/.clip-everything/config.json`：
+
+```json
+{
+  "whisper": {
+    "backend": "faster",
+    "python": "C:\\Python311\\python.exe",
+    "model": "D:\\models\\large-v3",
+    "device": "cuda",
+    "compute": "float32"
+  }
+}
+```
+
+优先级：命令行参数 > 环境变量 > 这个文件。
+
+国内下载模型不必翻墙：
+
+```bash
+# ModelScope，逐个文件下
+curl -L -o model.bin "https://www.modelscope.cn/api/v1/models/pengzhendong/faster-whisper-large-v3-turbo/repo?Revision=master&FilePath=model.bin"
+```
+
+实测（i7-7700 + GTX 1080 Ti，40:43 课程音频）：whisper.cpp `small` 用 810 秒，faster-whisper `large-v3-turbo` 用 150 秒，约 16 倍实时。
+
 **整门课程。** 加 `--playlist` 会把课程播放列表逐讲转写，每讲一份笔记，并在同目录生成 `00-Index.md`。单讲失败只会记进索引，不会中断整批：
 
 ```bash
@@ -221,6 +259,8 @@ YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再
 | --- | --- | --- |
 | `--lang <codes>` | `zh-Hans,zh-CN,zh,en` | 字幕语言优先级 |
 | `--whisper-model <name>` | `small` | `tiny` \| `base` \| `small` \| `medium` \| `large-v3` |
+| `--whisper-backend <name>` | `auto` | `auto` \| `cpp`（whisper.cpp）\| `faster`（GPU） |
+| `--whisper-timeout-ms <n>` | max(1 小时, 8 倍音频) | 语音转写时间上限 |
 | `--no-whisper` | 关闭 | 没有字幕时直接失败，不转写 |
 | `--force-whisper` | 关闭 | 忽略字幕，强制转写音频 |
 | `--save-srt` | 关闭 | 额外写出 `<文件名>.srt` |
@@ -233,6 +273,7 @@ YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再
 | `--playlist` | 关闭 | 把播放列表里的每个视频都转写 |
 | `--limit <n>` | 全部 | 配合 `--playlist`，只转前 `n` 个 |
 | `--threads <n>` | CPU 核数 - 1 | whisper.cpp 线程数 |
+| `--timeout-ms <n>` | `600000` | 网络步骤超时（下载、取元信息） |
 
 三个实际会遇到的问题：
 

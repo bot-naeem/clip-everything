@@ -216,6 +216,54 @@ Route selection, in order:
 2. automatic captions matching `--lang`
 3. speech-to-text with `--whisper-model` (default `small`)
 
+**GPU and larger models (optional).** The whisper.cpp release is CPU-only. If you
+have an NVIDIA GPU, `--whisper-backend faster` runs
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) instead, which takes
+`large-v3` and friends at a fraction of the wall time:
+
+```bash
+python -m pip install faster-whisper nvidia-cublas-cu12 nvidia-cudnn-cu12
+set CLIP_PYTHON=C:\path\to\python.exe            # only if python is not on PATH
+set CLIP_FASTER_WHISPER_MODEL=D:\models\large-v3  # model dir, or a HF repo id
+npm run clip -- --video "<url>"
+```
+
+`--whisper-backend auto` (the default) switches to faster-whisper as soon as
+`CLIP_FASTER_WHISPER_MODEL` is set, and stays on whisper.cpp otherwise.
+`CLIP_FASTER_WHISPER_DEVICE` (`cuda`/`cpu`) and `CLIP_FASTER_WHISPER_COMPUTE`
+(`float16`/`float32`/`int8_float16`) tune the run; Pascal cards (GTX 10x0) fall
+back to `float32` automatically because they cannot do efficient float16.
+
+The CUDA libraries are found automatically when they come from the
+`nvidia-*-cu12` wheels.
+
+Rather than exporting variables in every shell, put the settings in
+`~/.clip-everything/config.json`:
+
+```json
+{
+  "whisper": {
+    "backend": "faster",
+    "python": "C:\\Python311\\python.exe",
+    "model": "D:\\models\\large-v3",
+    "device": "cuda",
+    "compute": "float32"
+  }
+}
+```
+
+Precedence is CLI flag, then environment variable, then this file.
+
+Models can be fetched without Hugging Face:
+
+```bash
+# from ModelScope, one file at a time
+curl -L -o model.bin "https://www.modelscope.cn/api/v1/models/pengzhendong/faster-whisper-large-v3-turbo/repo?Revision=master&FilePath=model.bin"
+```
+
+Measured on an i7-7700 + GTX 1080 Ti, 40:43 of lecture audio: whisper.cpp `small`
+took 810 s, faster-whisper `large-v3-turbo` took 150 s (about 16x realtime).
+
 **Whole playlists.** `--playlist` expands a course playlist, writes one note per
 video, and drops a `00-Index.md` next to them. A failed video is recorded in the
 index instead of aborting the run:
@@ -234,6 +282,8 @@ cleaned cues next to the note.
 | --- | --- | --- |
 | `--lang <codes>` | `zh-Hans,zh-CN,zh,en` | Subtitle language preference |
 | `--whisper-model <name>` | `small` | `tiny` \| `base` \| `small` \| `medium` \| `large-v3` |
+| `--whisper-backend <name>` | `auto` | `auto` \| `cpp` (whisper.cpp) \| `faster` (GPU) |
+| `--whisper-timeout-ms <n>` | max(1h, 8x audio) | Speech-to-text time budget |
 | `--no-whisper` | off | Fail instead of falling back to speech-to-text |
 | `--force-whisper` | off | Ignore captions and transcribe the audio |
 | `--save-srt` | off | Also write `<name>.srt` |
@@ -246,6 +296,7 @@ cleaned cues next to the note.
 | `--playlist` | off | Transcribe every video in a playlist URL |
 | `--limit <n>` | all | With `--playlist`, stop after `n` videos |
 | `--threads <n>` | CPU count - 1 | whisper.cpp threads |
+| `--timeout-ms <n>` | `600000` | Network step timeout (downloads, metadata) |
 
 Three practical notes:
 

@@ -29,6 +29,7 @@ function firstErrorLine(stderr) {
  */
 function run(bin, args, options = {}) {
 	const timeoutMs = options.timeoutMs || 600000;
+	const stage = options.stage || 'download';
 	return new Promise((resolve, reject) => {
 		const child = spawn(bin, args, { windowsHide: true });
 		const stdout = [];
@@ -39,7 +40,12 @@ function run(bin, args, options = {}) {
 			if (settled) return;
 			settled = true;
 			child.kill('SIGKILL');
-			reject(new StageError('download', `command timed out after ${Math.round(timeoutMs / 1000)}s: ${path.basename(bin)}`));
+			reject(
+				new StageError(
+					stage,
+					`command timed out after ${Math.round(timeoutMs / 1000)}s: ${path.basename(bin)}`
+				)
+			);
 		}, timeoutMs);
 
 		child.stdout.on('data', (chunk) => stdout.push(chunk));

@@ -22,6 +22,7 @@ const { StageError } = require('./lib/errors');
 const { buildVideoFrontmatter } = require('./lib/frontmatter');
 const { getDomain, renderFilename, uniquePath, writeMarkdownFile } = require('./lib/naming');
 const { resolveProfileDir } = require('./lib/args');
+const fasterWhisper = require('./lib/media/faster-whisper');
 const subtitles = require('./lib/media/subtitles');
 const whisper = require('./lib/media/whisper');
 const ytdlp = require('./lib/media/ytdlp');
@@ -64,7 +65,12 @@ function descriptionSnippet(description) {
 function transcriptLabel(source) {
 	if (!source) return '';
 	if (source.kind === 'whisper') {
-		return `Whisper ${source.model} transcript${source.language && source.language !== 'auto' ? ` (${source.language})` : ''}`;
+		const engine =
+			source.backend === 'faster-whisper'
+				? `Whisper ${source.model} (faster-whisper${source.device ? `, ${source.device}` : ''})`
+				: `Whisper ${source.model}`;
+		const language = source.language && source.language !== 'auto' ? ` (${source.language})` : '';
+		return `${engine} transcript${language}`;
 	}
 	const kind = source.automatic ? 'auto captions' : 'captions';
 	return `${kind} (${source.language})`;
@@ -301,16 +307,40 @@ async function collectTranscript(options, info, auth, tmpDir, warn, log) {
 		});
 
 		const spokenLanguage = options.languageExplicit ? options.languages[0] : 'auto';
-		log(`transcribing with whisper ${options.whisperModel} (language: ${spokenLanguage})`);
-		const result = await whisper.transcribe(audio, tmpDir, {
-			...options,
-			language: spokenLanguage,
-			onProgress: progressLogger(log, 'transcription'),
-		});
+		const backend = fasterWhisper.pickBackend(options);
 
-		cues = subtitles.normalizeCues(subtitles.parseSrt(fs.readFileSync(result.srtPath, 'utf8')));
-		language = result.detectedLanguage || spokenLanguage;
-		source = { kind: 'whisper', model: result.modelName, language };
+		if (backend === 'faster') {
+			const model = fasterWhisper.resolveModel(options.whisperModel, options);
+			log(`transcribing with faster-whisper ${model} (language: ${spokenLanguage})`);
+			const result = await fasterWhisper.transcribe(audio, tmpDir, {
+				...options,
+				language: spokenLanguage,
+				duration: info.duration,
+				onProgress: progressLogger(log, 'transcription'),
+			});
+
+			cues = subtitles.normalizeCues(subtitles.parseSrt(fs.readFileSync(result.srtPath, 'utf8')));
+			language = result.detectedLanguage || spokenLanguage;
+			source = {
+				kind: 'whisper',
+				backend: 'faster-whisper',
+				model: result.modelName,
+				device: result.device,
+				language,
+			};
+		} else {
+			log(`transcribing with whisper ${options.whisperModel} (language: ${spokenLanguage})`);
+			const result = await whisper.transcribe(audio, tmpDir, {
+				...options,
+				language: spokenLanguage,
+				duration: info.duration,
+				onProgress: progressLogger(log, 'transcription'),
+			});
+
+			cues = subtitles.normalizeCues(subtitles.parseSrt(fs.readFileSync(result.srtPath, 'utf8')));
+			language = result.detectedLanguage || spokenLanguage;
+			source = { kind: 'whisper', backend: 'whisper.cpp', model: result.modelName, language };
+		}
 	}
 
 	const paragraphs = subtitles.buildParagraphs(cues);
