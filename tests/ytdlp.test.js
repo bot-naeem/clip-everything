@@ -2,7 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import ytdlp from '../scripts/lib/media/ytdlp.js';
 
-const { classifyFailure, failureToError } = ytdlp;
+const { classifyFailure, failureToError, normalizeLang, playlistArgs } = ytdlp;
+
+describe('normalizeLang', () => {
+	it('drops the YouTube auto-caption hash', () => {
+		expect(normalizeLang('en-j3PyPqV-e1s')).toBe('en');
+		expect(normalizeLang('zh-Hans-abc123ABC-xy9')).toBe('zh-Hans');
+	});
+
+	it('keeps ordinary language codes untouched', () => {
+		expect(normalizeLang('en-US')).toBe('en-US');
+		expect(normalizeLang('zh-Hans')).toBe('zh-Hans');
+		expect(normalizeLang('')).toBe('');
+	});
+});
 
 const YOUTUBE = { url: 'https://www.youtube.com/watch?v=abc123' };
 
@@ -53,5 +66,39 @@ describe('failureToError', () => {
 	it('points at CLIP_JS_RUNTIME when formats are missing', () => {
 		const error = failureToError('ERROR: Requested format is not available', YOUTUBE);
 		expect(error.message).toMatch(/CLIP_JS_RUNTIME/);
+	});
+});
+
+describe('playlistArgs', () => {
+	const bin = 'yt-dlp';
+	const options = { supports: () => true, env: {} };
+
+	it('expands the whole playlist by default', () => {
+		const args = playlistArgs(bin, options, 'https://www.youtube.com/playlist?list=PLabc');
+
+		expect(args).toContain('--yes-playlist');
+		expect(args).toContain('--flat-playlist');
+		expect(args).not.toContain('--playlist-items');
+		expect(args[args.length - 1]).toBe('https://www.youtube.com/playlist?list=PLabc');
+	});
+
+	it('keeps only the requested entry range', () => {
+		const args = playlistArgs(bin, { ...options, playlistItems: '42-50' }, 'https://example.com/pl');
+
+		expect(args).toContain('--playlist-items');
+		expect(args[args.indexOf('--playlist-items') + 1]).toBe('42-50');
+	});
+
+	it('passes the proxy and cookies through', () => {
+		const args = playlistArgs(
+			bin,
+			{ ...options, proxy: 'http://127.0.0.1:7890', cookiesFile: 'C:/cookies.txt' },
+			'https://example.com/pl'
+		);
+
+		expect(args).toContain('--proxy');
+		expect(args[args.indexOf('--proxy') + 1]).toBe('http://127.0.0.1:7890');
+		expect(args).toContain('--cookies');
+		expect(args[args.indexOf('--cookies') + 1]).toBe('C:/cookies.txt');
 	});
 });

@@ -282,6 +282,19 @@ Videos are transcribed `--jobs` at a time (default: 2 on the GPU backend, 1 on
 whisper.cpp). Results and the index keep the playlist order no matter which
 video finishes first.
 
+**One season out of many.** Course channels often publish one long playlist
+holding every season ("all previous quarters"). `--playlist-items` keeps a
+range of entries with yt-dlp's own syntax, and `--playlist-title` names the
+index after the season you actually took:
+
+```bash
+npm run clip -- --video "https://www.youtube.com/playlist?list=PLoROMvodv4rNiJRchCzutFw5ItR_Z27CM" \
+  --playlist --playlist-items 42-50 --playlist-title "Stanford CS25 Transformers United V6 (2026)"
+```
+
+The index then records the selection it came from, so the notes stay
+reproducible.
+
 YouTube's rolling auto-captions (each cue repeats the previous one) are collapsed
 before the text is grouped into paragraphs on pauses longer than 2.5 s, so the
 note reads like prose instead of one line per cue. `--save-srt` writes the
@@ -304,6 +317,8 @@ cleaned cues next to the note.
 | `--login` | off | Open a browser to sign in for this site, then continue |
 | `--playlist` | off | Transcribe every video in a playlist URL |
 | `--limit <n>` | all | With `--playlist`, stop after `n` videos |
+| `--playlist-items <spec>` | all | With `--playlist`, keep only these entries (yt-dlp syntax, e.g. `42-50`) |
+| `--playlist-title <text>` | playlist title | With `--playlist`, override the index title |
 | `--jobs <n>` | 2 on GPU, 1 on CPU | With `--playlist`, transcribe `n` videos at once |
 | `--threads <n>` | CPU count - 1 | whisper.cpp threads |
 | `--timeout-ms <n>` | `600000` | Network step timeout (downloads, metadata) |

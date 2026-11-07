@@ -44,6 +44,8 @@ const USAGE = [
 	'  --login                        Open a browser to sign in for this site, then continue',
 	'  --playlist                     Transcribe every video in a playlist URL',
 	'  --limit <n>                    With --playlist, stop after the first n videos',
+	'  --playlist-items <spec>       With --playlist, keep only these entries (yt-dlp syntax, e.g. 42-50)',
+	'  --playlist-title <text>       With --playlist, override the index title',
 	'  --jobs <n>                     With --playlist, transcribe n videos at once (default: 2 on GPU, 1 on CPU)',
 	'  --threads <n>                  whisper.cpp threads (default: CPU count)',
 	'  --whisper-timeout-ms <n>       Speech-to-text timeout (default: max(1h, 8x audio))',
@@ -136,6 +138,8 @@ function parseVideoArgs(argv, env = {}) {
 		login: false,
 		playlist: false,
 		limit: 0,
+		playlistItems: '',
+		playlistTitle: '',
 		jobs: 0,
 		threads: 0,
 		timeoutMs: 600000,
@@ -221,6 +225,12 @@ function parseVideoArgs(argv, env = {}) {
 			case '--limit':
 				options.limit = Number(requireValue(args, ++i, arg)) || 0;
 				if (options.limit < 1) fail('--limit must be a positive number');
+				break;
+			case '--playlist-items':
+				options.playlistItems = requireValue(args, ++i, arg);
+				break;
+			case '--playlist-title':
+				options.playlistTitle = requireValue(args, ++i, arg);
 				break;
 			case '--jobs':
 				options.jobs = Number(requireValue(args, ++i, arg)) || 0;

@@ -216,16 +216,26 @@ function entryUrl(entry) {
 	return null;
 }
 
-/** Expand a playlist/channel URL into lightweight entries (no per-video probe). */
-async function probePlaylist(url, options = {}) {
-	const bin = requireTool('ytDlp', options);
+/**
+ * The argument list that expands a playlist. A course playlist often holds
+ * every season ("all previous quarters"), so the caller can keep one range of
+ * entries with yt-dlp's own `--playlist-items` syntax (e.g. "42-50").
+ */
+function playlistArgs(bin, options = {}, url = '') {
 	const args = [
 		...baseArgs({ ...options, playlist: true }),
 		...jsRuntimeArgs(bin, options),
 		'--flat-playlist',
-		'-J',
-		url,
 	];
+	if (options.playlistItems) args.push('--playlist-items', options.playlistItems);
+	args.push('-J', url);
+	return args;
+}
+
+/** Expand a playlist/channel URL into lightweight entries (no per-video probe). */
+async function probePlaylist(url, options = {}) {
+	const bin = requireTool('ytDlp', options);
+	const args = playlistArgs(bin, options, url);
 	const result = await run(bin, args, { timeoutMs: options.timeoutMs });
 
 	if (result.code !== 0) throw failureToError(result.stderr, options);
@@ -276,6 +286,18 @@ function pickSubtitleTrack(info, languages) {
 	if (anyAuto) return { lang: anyAuto, automatic: true, formats: auto[anyAuto] };
 
 	return null;
+}
+
+/**
+ * YouTube's automatic captions come back under a hashed track code such as
+ * `en-j3PyPqV-e1s` (the base language plus the auto-translation set id).
+ * The reader cares about the language, not the hash.
+ */
+function normalizeLang(lang) {
+	const raw = String(lang || '').trim();
+	if (!raw) return raw;
+	const match = /^([a-z]{2,3}(?:-[A-Za-z]{2,4})?)-[A-Za-z0-9]{6,12}-[a-z0-9]{2,4}$/.exec(raw);
+	return match ? match[1] : raw;
 }
 
 function preferredFormat(formats) {
@@ -375,8 +397,10 @@ module.exports = {
 	entryUrl,
 	failureToError,
 	languageMatches,
+	normalizeLang,
 	pickSubtitleTrack,
 	preferredFormat,
+	playlistArgs,
 	probe,
 	probePlaylist,
 	run,

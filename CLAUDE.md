@@ -23,6 +23,7 @@ npm run clip -- <url>       # clip one page -> ./clips/<title>.md
 npm run clip -- --video <url>       # transcribe a video -> ./clips/<title>.md
 npm run clip -- --video <url> --login  # sign in once (YouTube), then transcribe
 npm run clip -- --video <playlist> --playlist  # whole course + 00-Index.md
+npm run clip -- --video <playlist> --playlist --playlist-items 42-50 --playlist-title "CS25 V6"  # one season
 npm run setup:video         # yt-dlp + ffmpeg + whisper.cpp + model (~600 MB)
 npm run login -- --profile <name>   # visible browser, saves cookies on close
 npm test                    # vitest (tests/)
@@ -106,6 +107,9 @@ Defaults this project settled on after measuring:
 - Caption formats (json3, vtt, srt) all funnel through `parseSubtitles()` and then
   `normalizeCues()`. Auto captions repeat the previous line, so dedupe is not
   optional — keep it covered by `tests/subtitles.test.js`.
+- YouTube names automatic caption tracks `en-<hash>-<suffix>`; the note metadata
+  shows the base language (`normalizeLang()`), while the download still uses the
+  raw code.
 - YouTube walls anonymous datacenter/proxy IPs behind a login check. `--login`
   opens the same visible window as `npm run login`, waits for it to close, and
   verifies a real session cookie (not just anonymous `YSC`/`VISITOR_INFO1_LIVE`)
@@ -125,6 +129,11 @@ Defaults this project settled on after measuring:
   single-video path for each entry with `login: false` (so the login window opens
   at most once). Per-video failures go into `failures[]` and the generated
   `00-Index.md`; they never abort the batch. `--limit n` is for previewing.
+- Course channels keep every season in one playlist ("all previous quarters").
+  `--playlist-items 42-50` passes yt-dlp's own selection syntax through to the
+  probe, and `--playlist-title` names the index after the season actually
+  taken; the index records the selection so the notes stay reproducible. The
+  Stanford CS25/CS329A archives were produced exactly this way.
 
 ## Conventions
 

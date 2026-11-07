@@ -258,6 +258,15 @@ npm run clip -- --video "https://www.youtube.com/playlist?list=..." --playlist -
 
 `--jobs` 控制同时转写几讲（GPU 后端默认 2，whisper.cpp 默认 1）。无论谁先跑完，输出和索引都按播放列表顺序排列。
 
+**一整季课程。** 课程频道常常把历年讲次都塞进**同一个**播放列表。`--playlist-items` 用 yt-dlp 原生语法只保留其中一段，`--playlist-title` 给索引起一个贴合季次的名字：
+
+```bash
+npm run clip -- --video "https://www.youtube.com/playlist?list=PLoROMvodv4rNiJRchCzutFw5ItR_Z27CM" \
+  --playlist --playlist-items 42-50 --playlist-title "Stanford CS25 Transformers United V6 (2026)"
+```
+
+索引里会记下这段选集，笔记可复现。
+
 YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再按超过 2.5 秒的停顿合并成段落，所以读起来是文章而不是一行一句。`--save-srt` 会把清洗后的字幕同时写成 `.srt`。
 
 | 选项 | 默认 | 说明 |
@@ -277,6 +286,8 @@ YouTube 的滚动式自动字幕（每条都重复上一条）会先去重，再
 | `--login` | 关闭 | 打开浏览器登录当前站点，登完继续转写 |
 | `--playlist` | 关闭 | 把播放列表里的每个视频都转写 |
 | `--limit <n>` | 全部 | 配合 `--playlist`，只转前 `n` 个 |
+| `--playlist-items <spec>` | 全部 | 配合 `--playlist`，只保留指定条目（yt-dlp 语法，如 `42-50`） |
+| `--playlist-title <text>` | 播放列表原名 | 配合 `--playlist`，覆盖索引标题 |
 | `--jobs <n>` | GPU 2 / CPU 1 | 配合 `--playlist`，同时转写几讲 |
 | `--threads <n>` | CPU 核数 - 1 | whisper.cpp 线程数 |
 | `--timeout-ms <n>` | `600000` | 网络步骤超时（下载、取元信息） |

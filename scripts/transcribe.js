@@ -284,8 +284,8 @@ async function collectTranscript(options, info, auth, tmpDir, warn, log) {
 		const downloaded = await ytdlp.downloadSubtitles(options.url, track, tmpDir, active);
 		const raw = fs.readFileSync(downloaded.file, 'utf8');
 		cues = subtitles.normalizeCues(subtitles.parseSubtitles(raw, downloaded.file));
-		language = track.lang;
-		source = { kind: 'subtitles', automatic: track.automatic, language: track.lang };
+		language = ytdlp.normalizeLang(track.lang);
+		source = { kind: 'subtitles', automatic: track.automatic, language };
 
 		if (!cues.length) warn('empty_subtitles', 'the subtitle file contained no usable cues');
 	}
@@ -409,10 +409,10 @@ function escapeCell(value) {
 }
 
 /** Pure so the index layout can be unit-tested without touching the filesystem. */
-function renderPlaylistIndex(list, items, failures = []) {
+function renderPlaylistIndex(list, items, failures = [], options = {}) {
 	const source = list.webpage_url || list.original_url || '';
 	// Channel/space listings come back without a title; the url says more than "Playlist".
-	const title = String(list.title || '').trim() || source || 'Playlist';
+	const title = String(options.title || list.title || '').trim() || source || 'Playlist';
 	const lines = [
 		'---',
 		`title: ${JSON.stringify(title)}`,
@@ -423,10 +423,17 @@ function renderPlaylistIndex(list, items, failures = []) {
 		`# ${title}`,
 		'',
 		`共 ${items.length} 讲${failures.length ? `，${failures.length} 讲失败` : ''}。`,
+	];
+
+	if (options.selection) {
+		lines.push('', `条目选择：\`${options.selection}\`（原播放列表中的条目区间）。`);
+	}
+
+	lines.push(
 		'',
 		'| # | 标题 | 时长 | 文件 |',
-		'| --- | --- | --- | --- |',
-	];
+		'| --- | --- | --- | --- |'
+	);
 
 	items.forEach((item, index) => {
 		const name = path.basename(item.outputPath || '');
@@ -486,7 +493,8 @@ async function runPlaylist(options, warn, log) {
 	const selected = options.limit > 0 ? entries.slice(0, options.limit) : entries;
 	const autoJobs = fasterWhisper.pickBackend(options) === 'faster' ? 2 : 1;
 	const jobs = Math.max(1, Math.min(options.jobs || autoJobs, selected.length));
-	log(`playlist: ${list.title || '(untitled)'} — ${selected.length}/${entries.length} videos, ${jobs} at a time`);
+	const label = options.playlistTitle || list.title || '(untitled)';
+	log(`playlist: ${label} — ${selected.length}/${entries.length} videos, ${jobs} at a time`);
 
 	const results = await mapPool(selected.length, jobs, async (index) => {
 		const entry = selected[index];
@@ -532,7 +540,14 @@ async function runPlaylist(options, warn, log) {
 
 	fs.mkdirSync(options.outputDir, { recursive: true });
 	const indexPath = uniquePath(path.join(options.outputDir, '00-Index.md'));
-	fs.writeFileSync(indexPath, renderPlaylistIndex(list, items, failures), 'utf8');
+	fs.writeFileSync(
+		indexPath,
+		renderPlaylistIndex(list, items, failures, {
+			title: options.playlistTitle,
+			selection: options.playlistItems,
+		}),
+		'utf8'
+	);
 
 	return { list, items, failures, indexPath };
 }
@@ -575,7 +590,7 @@ async function main(argv = process.argv.slice(2)) {
 						ok: batch.items.length > 0,
 						playlist: true,
 						url: options.url,
-						title: batch.list.title,
+						title: options.playlistTitle || batch.list.title,
 						count: batch.items.length,
 						failed: batch.failures.length,
 						indexPath: batch.indexPath,

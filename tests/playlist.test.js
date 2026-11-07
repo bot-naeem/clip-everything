@@ -104,4 +104,18 @@ describe('renderPlaylistIndex', () => {
 		expect(markdown).toContain('## 失败');
 		expect(markdown).toContain('Broken — download failed');
 	});
+
+	it('uses an overridden title and records the entry selection', () => {
+		const markdown = renderPlaylistIndex(
+			list,
+			[{ title: 'One', outputPath: 'C:/out/One.md', duration: '10:00' }],
+			[],
+			{ title: 'CS25 Transformers United V6 (2026)', selection: '42-50' }
+		);
+
+		expect(markdown).toContain('# CS25 Transformers United V6 (2026)');
+		expect(markdown).toContain('title: "CS25 Transformers United V6 (2026)"');
+		expect(markdown).toContain('条目选择：`42-50`');
+		expect(markdown).not.toContain('# Reasoning Course');
+	});
 });

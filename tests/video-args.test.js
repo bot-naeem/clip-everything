@@ -53,6 +53,21 @@ describe('parseVideoArgs', () => {
 		expect(() => parseVideoArgs([URL, '--jobs', '0'], env)).toThrow();
 	});
 
+	it('parses the playlist entry selection and the index title', () => {
+		const options = parseVideoArgs(
+			[URL, '--playlist', '--playlist-items', '42-50', '--playlist-title', 'CS25 V6'],
+			env
+		);
+		expect(options.playlistItems).toBe('42-50');
+		expect(options.playlistTitle).toBe('CS25 V6');
+	});
+
+	it('defaults the selection and title to empty', () => {
+		const options = parseVideoArgs([URL, '--playlist'], env);
+		expect(options.playlistItems).toBe('');
+		expect(options.playlistTitle).toBe('');
+	});
+
 	it('rejects an unknown whisper backend', () => {
 		expect(() => parseVideoArgs([URL, '--whisper-backend', 'magic'], env)).toThrow();
 	});
